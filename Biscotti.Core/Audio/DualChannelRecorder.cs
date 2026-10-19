@@ -9,6 +9,9 @@ namespace Biscotti.Core.Audio;
 /// streams, each written to its own WAV so transcription/merging can label
 /// speakers per channel. No bot joins the call — this just records what your
 /// machine plays and hears.
+///
+/// Channel counts and bytes written are exposed through <see cref="TotalBytes"/>
+/// so the UI can prove recording is actually alive (issue #21).
 /// </summary>
 public sealed class DualChannelRecorder : IDisposable
 {
@@ -16,9 +19,24 @@ public sealed class DualChannelRecorder : IDisposable
     private WasapiLoopbackCapture? _loopback;
     private WavStreamWriter? _micWav;
     private WavStreamWriter? _sysWav;
+    private AntiAliasDecimator? _micDecimator;
+    private AntiAliasDecimator? _sysDecimator;
+    private int _micChannels;
+    private int _sysChannels;
+    private long _micBytes;
+    private long _sysBytes;
 
     public string? MicWavPath { get; private set; }
     public string? SysWavPath { get; private set; }
+
+    /// <summary>Bytes written per channel since Start — zero means that channel is dead.</summary>
+    public (long mic, long sys) TotalBytes => (_micBytes, _sysBytes);
+
+    /// <summary>
+    /// Why the mic channel is missing audio, or null when it opened fine.
+    /// A dead mic must not take the system channel down with it (issue #13).
+    /// </summary>
+    public string? MicError { get; private set; }
 
     public static (List<WaveInDeviceInfo> mics, List<MMDevice> speakers) ListDevices()
     {
@@ -39,28 +57,99 @@ public sealed class DualChannelRecorder : IDisposable
     {
         MicWavPath = micWavPath;
         SysWavPath = sysWavPath;
+        _micBytes = 0;
+        _sysBytes = 0;
+        MicError = null;
         _micWav = new WavStreamWriter(micWavPath);
         _sysWav = new WavStreamWriter(sysWavPath);
 
-        // --- Microphone capture. Windows' shared-mode audio engine resamples
-        // --- to whatever we ask for, so 16k mono works on any device.
+        StartMic(preferredMicDevice ?? 0);
+        StartLoopback(preferredSpeakerId);
+    }
+
+    private void StartMic(int deviceNumber)
+    {
+        // Preferred: ask the shared-mode audio engine for 16k mono directly.
+        // Some devices (Bluetooth HFP, some USB mics) reject the request
+        // (issue #13): fall back to a 48k capture and convert ourselves.
         _mic = new WaveInEvent
         {
-            DeviceNumber = preferredMicDevice ?? 0,
+            DeviceNumber = deviceNumber,
             WaveFormat = new WaveFormat(AudioConfig.SampleRate, AudioConfig.BitsPerSample, AudioConfig.Channels),
             BufferMilliseconds = 50,
         };
-        _mic.DataAvailable += (_, e) => _micWav!.Append(e.Buffer.AsMemory(0, e.BytesRecorded));
-        _mic.StartRecording();
-        // --- System audio loopback, downmix to mono 16k ---
+        _mic.DataAvailable += NativeMicDataAvailable;
+        string? firstError = null;
+        try
+        {
+            _mic.StartRecording();
+            return;
+        }
+        catch (Exception ex)
+        {
+            // Recoverable: remember why we are falling back, but the channel
+            // is healthy if 48 kHz works, so MicError stays null.
+            firstError = ex.Message;
+        }
+        _mic.DataAvailable -= NativeMicDataAvailable;
+        _mic.Dispose();
+        _mic = null;
+
+        _mic = new WaveInEvent
+        {
+            DeviceNumber = deviceNumber,
+            WaveFormat = new WaveFormat(48000, AudioConfig.BitsPerSample, AudioConfig.Channels),
+            BufferMilliseconds = 50,
+        };
+        _micDecimator = new AntiAliasDecimator(48000);
+        _micChannels = _mic.WaveFormat.Channels;
+        _mic.DataAvailable += ConvertedMicDataAvailable;
+        try
+        {
+            _mic.StartRecording();
+        }
+        catch (Exception ex)
+        {
+            // Both rates refused (device gone, exclusive-mode hold, etc):
+            // keep the system channel recording and report the dead mic
+            // instead of aborting the whole meeting.
+            MicError = $"Mic unavailable (48 kHz fallback failed: {ex.Message}; 16 kHz: {firstError})";
+            _mic.DataAvailable -= ConvertedMicDataAvailable;
+            _mic.Dispose();
+            _mic = null;
+            _micDecimator = null;
+        }
+    }
+
+    private void NativeMicDataAvailable(object? sender, WaveInEventArgs e)
+    {
+        // Shared-mode resampling already matches the whisper input format.
+        _micWav!.Append(e.Buffer.AsMemory(0, e.BytesRecorded));
+        _micBytes += e.BytesRecorded;
+    }
+
+    private void ConvertedMicDataAvailable(object? sender, WaveInEventArgs e)
+    {
+        var mono16k = _micDecimator!.ProcessInt16(e.Buffer, e.BytesRecorded, _micChannels);
+        _micWav!.Append(mono16k);
+        _micBytes += mono16k.Length;
+    }
+
+    private void StartLoopback(string? preferredSpeakerId)
+    {
         var loopDevice = GetLoopDevice(preferredSpeakerId);
         _loopback = new WasapiLoopbackCapture(loopDevice);
-        _loopback.DataAvailable += (_, e) =>
-        {
-            var mono16k = LoopbackDownmixer.ToMono16k(e.Buffer, e.BytesRecorded, _loopback.WaveFormat);
-            _sysWav!.Append(mono16k);
-        };
+        _sysDecimator = new AntiAliasDecimator(_loopback.WaveFormat.SampleRate);
+        _sysChannels = _loopback.WaveFormat.Channels;
+        _loopback.DataAvailable += LoopbackDataAvailable;
         _loopback.StartRecording();
+    }
+
+    private void LoopbackDataAvailable(object? sender, WaveInEventArgs e)
+    {
+        var mono16k = _sysDecimator!.ProcessFloat(e.Buffer, e.BytesRecorded, _sysChannels);
+        _sysWav!.Append(mono16k);
+        _sysBytes += mono16k.Length;
     }
 
     private static MMDevice GetLoopDevice(string? preferredId)
@@ -96,38 +185,3 @@ public sealed class DualChannelRecorder : IDisposable
 }
 
 public record WaveInDeviceInfo(int Index, string Name);
-
-/// <summary>
-/// Converts WASAPI loopback's float32 stereo (typically 48k) to 16-bit mono 16k,
-/// averaging channels. Matches Whisper.net's expected input format exactly.
-/// </summary>
-public static class LoopbackDownmixer
-{
-    public static byte[] ToMono16k(byte[] wasapi, int count, WaveFormat fmt)
-    {
-        // WASAPI loopback delivers IEEE float, interleaved channels
-        int bytesPerSample = 4;
-        int channels = fmt.Channels;
-        int framesIn = count / (bytesPerSample * channels);
-        var outSamples = new List<short>(framesIn);
-
-        // naive linear decimation from fmt.SampleRate to 16k. Acceptable for speech.
-        double ratio = (double)fmt.SampleRate / AudioConfig.SampleRate;
-        for (int outIdx = 0; outIdx * ratio < framesIn; outIdx++)
-        {
-            int inIdx = (int)(outIdx * ratio);
-            double acc = 0;
-            for (int ch = 0; ch < channels; ch++)
-            {
-                int off = inIdx * channels * bytesPerSample + ch * bytesPerSample;
-                acc += BitConverter.ToSingle(wasapi, off);
-            }
-            float v = (float)(acc / channels);
-            v = Math.Clamp(v, -1f, 1f);
-            outSamples.Add((short)(v * short.MaxValue));
-        }
-        var bytes = new byte[outSamples.Count * 2];
-        Buffer.BlockCopy(outSamples.ToArray(), 0, bytes, 0, bytes.Length);
-        return bytes;
-    }
-}
