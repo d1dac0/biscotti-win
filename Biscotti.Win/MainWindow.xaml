@@ -39,7 +39,7 @@
                             <TextBlock Foreground="#668" FontSize="12">
                                 <Run Text="{Binding StartedUtc, StringFormat='{}{0:yyyy-MM-dd  HH:mm}'}"/>
                                 <Run Text=" — "/>
-                                <Run Text="{Binding Transcript.Count, StringFormat='{}{0} lines'}"/>
+                                <Run Text="{Binding Transcript.Count, Mode=OneWay, StringFormat='{}{0} lines'}"/>
                             </TextBlock>
                         </StackPanel>
                     </Border>
