@@ -75,7 +75,10 @@ public sealed class MeetingService : IAsyncDisposable
 
         SetState(RecordingState.Summarizing, "Writing summary with local AI (Ollama)…");
         using var ollama = new OllamaService(_settings.OllamaModel);
-        var raw = await ollama.SummarizeMeetingAsync(_current.Transcript, ct);
+        var chunkProgress = new Progress<(int chunk, int total)>(p =>
+            SetState(RecordingState.Summarizing,
+                $"Writing summary with local AI (part {p.chunk} of {p.total})…"));
+        var raw = await ollama.SummarizeMeetingAsync(_current.Transcript, chunkProgress, ct);
         if (!string.IsNullOrWhiteSpace(raw))
         {
             var (summary, actions, title) = SummaryParser.Parse(raw);
