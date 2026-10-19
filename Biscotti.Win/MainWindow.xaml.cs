@@ -19,6 +19,7 @@ namespace Biscotti.Win
         {
             InitializeComponent();
             _settings = AppSettings.Load();
+            WhisperRuntimeConfigurator.Apply(_settings); // before any WhisperFactory is created
             _meetings = new MeetingService(_settings);
             _meetings.StateChanged += (state, msg) => Dispatcher.Invoke(() => StatusText.Text = msg);
             _meetings.CurrentMeetingUpdated += m => Dispatcher.Invoke(() => RefreshList(m));
@@ -27,6 +28,77 @@ namespace Biscotti.Win
                 RecordButton.IsEnabled = false;
             _healthTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _healthTimer.Tick += (_, _) => UpdateRecordingHealth();
+            MaybeFirstRunGpuPrompt();
+        }
+
+        private bool _gpuPromptHandled;
+
+        /// <summary>
+        /// Issue #20 acceptance: on first run, detect the NVIDIA driver and
+        /// preselect the CUDA runtime when viable; CPU stays the silent default.
+        /// The decision is persisted so the prompt only ever appears once.
+        /// </summary>
+        private async void MaybeFirstRunGpuPrompt()
+        {
+            if (_settings.WhisperRuntime != null || _gpuPromptHandled) return;
+            _gpuPromptHandled = true;
+            var gpu = await Task.Run(() => GpuDetector.DetectNvidia());
+            if (_settings.WhisperRuntime != null) return; // user decided meanwhile elsewhere
+            if (gpu == null)
+            {
+                _settings.WhisperRuntime = "cpu";
+                _settings.Save();
+                return;
+            }
+            var answer = MessageBox.Show(this,
+                $"NVIDIA GPU detected:\n{gpu.Description}\n\n" +
+                "Enable faster GPU transcription?\n\n" +
+                "One-time ~330 MB download of the Whisper CUDA runtime into\n" +
+                "%LOCALAPPDATA%\\BiscottiWin\\runtimes.",
+                "Faster transcription", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            var yes = answer == MessageBoxResult.Yes;
+            _settings.WhisperRuntime = yes ? "gpu" : "cpu";
+            _settings.Save();
+            if (yes) await EnableGpuRuntimeAsync();
+        }
+
+        private async Task EnableGpuRuntimeAsync()
+        {
+            if (new GpuRuntimeStore().IsInstalled())
+            {
+                WhisperRuntimeConfigurator.Apply(_settings);
+                return;
+            }
+            ModelProgress.Visibility = Visibility.Visible;
+            ModelProgress.Value = 0;
+            RecordButton.IsEnabled = false;
+            try
+            {
+                var progress = new Progress<(double pct, string phase)>(p =>
+                {
+                    ModelProgress.Value = p.pct;
+                    StatusText.Text = p.phase;
+                });
+                await new GpuRuntimeStore().InstallAsync(progress);
+                WhisperRuntimeConfigurator.Apply(_settings);
+                StatusText.Text = "GPU transcription enabled.";
+            }
+            catch (Exception ex)
+            {
+                // any GPU failure keeps CPU transcription intact (issue #3 lesson)
+                MessageBox.Show(this, ex.Message, "GPU runtime setup failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                _settings.WhisperRuntime = "cpu";
+                _settings.Save();
+                WhisperRuntimeConfigurator.Apply(_settings);
+                StatusText.Text = "Staying on CPU transcription.";
+            }
+            finally
+            {
+                ModelProgress.Visibility = Visibility.Collapsed;
+                RecordButton.IsEnabled = true;
+                if (!ModelStore.IsDownloaded(CurrentOrPreferredModel()))
+                    RecordButton.IsEnabled = false;
+            }
         }
 
         private DateTime _recordingStartedUtc;

@@ -8,6 +8,12 @@ public sealed class AppSettings
     public string? SpeakerDeviceId { get; set; }
     public string? WhisperModelId { get; set; } = ModelStore.LargeV3Turbo.Id;
     public string? OllamaModel { get; set; } = "gemma3:4b";
+    /// <summary>
+    /// Transcription backend choice (issue #20): null until the first-run
+    /// NVIDIA prompt decides, then "cpu" or "gpu". "gpu" only engages when
+    /// the lazily downloaded CUDA runtime is installed; CPU is the fallback.
+    /// </summary>
+    public string? WhisperRuntime { get; set; }
 
     public string GetResolvedModelPath()
     {
