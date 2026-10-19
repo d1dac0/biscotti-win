@@ -13,6 +13,7 @@ namespace Biscotti.Win
         private readonly MeetingService _meetings;
         private readonly AppSettings _settings;
         private bool _recording;
+        private readonly System.Windows.Threading.DispatcherTimer _healthTimer;
 
         public MainWindow()
         {
@@ -24,6 +25,29 @@ namespace Biscotti.Win
             RefreshList();
             if (!ModelStore.IsDownloaded(CurrentOrPreferredModel()))
                 RecordButton.IsEnabled = false;
+            _healthTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _healthTimer.Tick += (_, _) => UpdateRecordingHealth();
+        }
+
+        private DateTime _recordingStartedUtc;
+
+        /// <summary>
+        /// Live proof of recording (issue #21): elapsed time plus per-channel
+        /// bytes, with a warning when a channel looks dead so "is it working?"
+        /// never requires opening files afterwards.
+        /// </summary>
+        private void UpdateRecordingHealth()
+        {
+            if (!_recording) return;
+            var (mic, sys) = _meetings.RecordingStats;
+            var elapsed = DateTime.UtcNow - _recordingStartedUtc;
+            var micMb = (mic / 1024.0 / 1024.0).ToString("0.0");
+            var sysMb = (sys / 1024.0 / 1024.0).ToString("0.0");
+            var warning = "";
+            if (mic == 0 && sys == 0) warning = "  ⚠ no audio captured on either channel — check microphone in Windows sound settings";
+            else if (mic == 0) warning = "  ⚠ mic silent";
+            else if (sys == 0) warning = "  ⚠ system audio not detected — is anything playing?";
+            StatusText.Text = $"Recording… {elapsed:hh\\:mm\\:ss} · mic {micMb} MB · speaker {sysMb} MB{warning}";
         }
 
         private ModelStore.WhisperModel CurrentOrPreferredModel() =>
@@ -48,8 +72,10 @@ namespace Biscotti.Win
                 {
                     _meetings.StartRecording();
                     _recording = true;
+                    _recordingStartedUtc = DateTime.UtcNow;
                     RecordButton.Content = "■  Stop";
                     RecordButton.Background = new SolidColorBrush(Color.FromRgb(0x27, 0x7D, 0x5E));
+                    _healthTimer.Start();
                 }
                 catch (Exception ex)
                 {
@@ -59,6 +85,7 @@ namespace Biscotti.Win
             }
 
             _recording = false;
+            _healthTimer.Stop();
             RecordButton.Content = "●  Start recording";
             RecordButton.Background = new SolidColorBrush(Color.FromRgb(0xC0, 0x39, 0x2B));
             RecordButton.IsEnabled = false;

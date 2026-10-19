@@ -52,6 +52,25 @@ public sealed class WavStreamWriter : IDisposable
         if (_closed) throw new InvalidOperationException("WavStreamWriter already closed.");
         _bw.Write(pcmBytes.Span);
         _dataBytes += pcmBytes.Length;
+        MaintainHeaderSoCrashesLeaveReadableFile();
+    }
+
+    /// <summary>
+    /// Rewrites RIFF/data sizes after every append. If we are killed mid-meeting
+    /// (Windows Update, crash, power loss) the file on disk is still a coherent
+    /// WAV readable up to the last written byte. Doing this per-append is two
+    /// sector writes; doing it only in Close() left zeros forever (issue #12).
+    /// </summary>
+    private void MaintainHeaderSoCrashesLeaveReadableFile()
+    {
+        var riffSize = 36 + _dataBytes;
+        var pos = _fs.Position;
+        _fs.Seek(4, SeekOrigin.Begin);
+        _bw.Write((uint)riffSize);
+        _fs.Seek(40, SeekOrigin.Begin);
+        _bw.Write((uint)_dataBytes);
+        _bw.Flush();
+        _fs.Seek(pos, SeekOrigin.Begin);
     }
 
     public void Close()
