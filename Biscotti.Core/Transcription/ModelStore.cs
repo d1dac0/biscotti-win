@@ -22,13 +22,41 @@ public static class ModelStore
 
     public static readonly List<WhisperModel> All = new() { LargeV3Turbo, Small };
 
-    public static string ModelDir => Path.Combine(
+    // Test seam: lets unit tests redirect the model directory to a temp path.
+    internal static Func<string> ModelDirBackend = () => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "BiscottiWin", "Models");
 
+    public static string ModelDir => ModelDirBackend();
+
     public static string ModelPath(WhisperModel m) => Path.Combine(ModelDir, m.RepoFile);
 
-    public static bool IsDownloaded(WhisperModel m) => File.Exists(ModelPath(m)) && new FileInfo(ModelPath(m)).Length > 1_000_000;
+    /// <summary>
+    /// The file must be plausibly complete, not merely present: a truncated
+    /// mid-write file must not pass as "downloaded" (issue #32). The 10%
+    /// tolerance keeps the approximate ApproxBytes constants from
+    /// false-flagging a legit file.
+    /// </summary>
+    public static bool IsDownloaded(WhisperModel m)
+    {
+        var path = ModelPath(m);
+        if (!File.Exists(path)) return false;
+        long floor = Math.Max(1_000_000, (long)(m.ApproxBytes * 0.9));
+        return new FileInfo(path).Length >= floor;
+    }
+
+    /// <summary>
+    /// Issue #32: when a present-but-incomplete model file blocks the
+    /// download path, move it aside (keep a timestamped copy) so the normal
+    /// download flow can place a fresh file — the Download button becomes
+    /// the repair path.
+    /// </summary>
+    internal static void MoveCorruptAside(WhisperModel m)
+    {
+        var target = ModelPath(m);
+        if (File.Exists(target))
+            File.Move(target, target + $".corrupt-{DateTime.Now:yyyyMMddHHmmss}");
+    }
 
     private const string BaseUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/";
 
@@ -38,6 +66,7 @@ public static class ModelStore
         Directory.CreateDirectory(ModelDir);
         if (IsDownloaded(m)) return m;
         var target = ModelPath(m);
+        MoveCorruptAside(m); // present-but-corrupt: park it, replace by normal download
         var tmp = target + ".part";
         long existing = File.Exists(tmp) ? new FileInfo(tmp).Length : 0;
 
