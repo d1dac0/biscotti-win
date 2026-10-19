@@ -1,0 +1,16 @@
+[
+  {"name":"type:bug","color":"D73A4A","description":"Existing behavior is incorrect"},
+  {"name":"type:story","color":"0E8A16","description":"New user-facing capability"},
+  {"name":"type:task","color":"5319E7","description":"Maintenance, documentation, build or engineering task"},
+  {"name":"type:audit","color":"BFD4F2","description":"Review or investigation deliverable, distinct from its remediation"},
+  {"name":"priority:P0","color":"B60205","description":"Immediate correctness or release blocker"},
+  {"name":"priority:P1","color":"D93F0B","description":"Important before first usable release"},
+  {"name":"priority:P2","color":"FBCA04","description":"Normal planned work or scoped follow-up"},
+  {"name":"priority:P3","color":"C2E0C6","description":"Low urgency improvement; explicitly deferred"},
+  {"name":"area:capture","color":"1D76DB","description":"Mic, WASAPI loopback, WAV writing and device selection"},
+  {"name":"area:transcription","color":"006B75","description":"Whisper model download, inference and transcript assembly"},
+  {"name":"area:ai","color":"FEF2C0","description":"Ollama summaries, action items, titles and speaker names"},
+  {"name":"area:ui","color":"D4C5F9","description":"WPF meeting list, recording controls and meeting views"},
+  {"name":"area:test","color":"C5DEF5","description":"Scripted playthroughs, test audio and validation"},
+  {"name":"area:platform","color":"BFDADC","description":"CI, repository workflow, packaging and distribution"}
+]
