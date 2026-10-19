@@ -24,13 +24,12 @@ namespace Biscotti.Win
             _meetings.StateChanged += (state, msg) => Dispatcher.Invoke(() => StatusText.Text = msg);
             _meetings.CurrentMeetingUpdated += m => Dispatcher.Invoke(() => RefreshList(m));
             RefreshList();
+            UpdateModelButtons();
             var model = CurrentOrPreferredModel();
-            if (!ModelStore.IsDownloaded(model))
+            if (!ModelStore.IsDownloaded(model) && System.IO.File.Exists(ModelStore.ModelPath(model)))
             {
-                RecordButton.IsEnabled = false;
                 // issue #32: present-but-truncated file — Download is the repair path
-                if (System.IO.File.Exists(ModelStore.ModelPath(model)))
-                    StatusText.Text = "Model file incomplete or corrupt — press Download model to repair.";
+                StatusText.Text = "Model file incomplete or corrupt — press Download model to repair.";
             }
             _healthTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _healthTimer.Tick += (_, _) => UpdateRecordingHealth();
@@ -101,9 +100,7 @@ namespace Biscotti.Win
             finally
             {
                 ModelProgress.Visibility = Visibility.Collapsed;
-                RecordButton.IsEnabled = true;
-                if (!ModelStore.IsDownloaded(CurrentOrPreferredModel()))
-                    RecordButton.IsEnabled = false;
+                UpdateModelButtons();
             }
         }
 
@@ -130,6 +127,20 @@ namespace Biscotti.Win
 
         private ModelStore.WhisperModel CurrentOrPreferredModel() =>
             ModelStore.All.FirstOrDefault(m => m.Id == _settings.WhisperModelId) ?? ModelStore.All[0];
+
+        /// <summary>
+        /// The single place that keeps the model-driven UI state in sync:
+        /// Record runs only with the model on disk, and the Download button
+        /// is visible only while the model is missing or incomplete (issue
+        /// #35) — a complete install never shows an action that reads as a
+        /// required repeat download.
+        /// </summary>
+        private void UpdateModelButtons()
+        {
+            var downloaded = ModelStore.IsDownloaded(CurrentOrPreferredModel());
+            RecordButton.IsEnabled = downloaded;
+            ModelButton.Visibility = downloaded ? Visibility.Collapsed : Visibility.Visible;
+        }
 
         private void RefreshList(Meeting? update = null)
         {
@@ -177,9 +188,7 @@ namespace Biscotti.Win
             }
             finally
             {
-                RecordButton.IsEnabled = true;
-                if (!ModelStore.IsDownloaded(CurrentOrPreferredModel()))
-                    RecordButton.IsEnabled = false;
+                UpdateModelButtons();
             }
         }
 
@@ -207,7 +216,7 @@ namespace Biscotti.Win
             finally
             {
                 ModelProgress.Visibility = Visibility.Collapsed;
-                RecordButton.IsEnabled = true;
+                UpdateModelButtons();
             }
         }
 
