@@ -20,9 +20,12 @@ public static class MeetingStore
         NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
     };
 
-    public static string Root => Path.Combine(
+    public static string Root => RootOverride ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "BiscottiWin", "Meetings");
+
+    /// <summary>Test hook; null in the real app. Tests point Root at a temp dir.</summary>
+    internal static string? RootOverride;
 
     public static string MeetingDir(Guid id) => Path.Combine(Root, id.ToString());
 
@@ -39,8 +42,17 @@ public static class MeetingStore
     {
         var dir = MeetingDir(m.Id);
         Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, "meeting.json"), JsonSerializer.Serialize(m, JsonOpts));
-        File.WriteAllText(Path.Combine(dir, "meeting.md"), RenderMarkdown(m), new UTF8Encoding(false));
+        // Atomic on NTFS: write the full copy beside the target, then rename over
+        // it. A kill mid-write leaves the previous good copy intact (issue #12).
+        var jsonPath = Path.Combine(dir, "meeting.json");
+        var tmp = jsonPath + ".tmp";
+        File.WriteAllText(tmp, JsonSerializer.Serialize(m, JsonOpts));
+        File.Move(tmp, jsonPath, overwrite: true);
+
+        var mdPath = Path.Combine(dir, "meeting.md");
+        var mdTmp = mdPath + ".tmp";
+        File.WriteAllText(mdTmp, RenderMarkdown(m), new UTF8Encoding(false));
+        File.Move(mdTmp, mdPath, overwrite: true);
     }
 
     public static List<Meeting> LoadAll()
