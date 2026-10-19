@@ -24,8 +24,14 @@ namespace Biscotti.Win
             _meetings.StateChanged += (state, msg) => Dispatcher.Invoke(() => StatusText.Text = msg);
             _meetings.CurrentMeetingUpdated += m => Dispatcher.Invoke(() => RefreshList(m));
             RefreshList();
-            if (!ModelStore.IsDownloaded(CurrentOrPreferredModel()))
+            var model = CurrentOrPreferredModel();
+            if (!ModelStore.IsDownloaded(model))
+            {
                 RecordButton.IsEnabled = false;
+                // issue #32: present-but-truncated file — Download is the repair path
+                if (System.IO.File.Exists(ModelStore.ModelPath(model)))
+                    StatusText.Text = "Model file incomplete or corrupt — press Download model to repair.";
+            }
             _healthTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _healthTimer.Tick += (_, _) => UpdateRecordingHealth();
             MaybeFirstRunGpuPrompt();
