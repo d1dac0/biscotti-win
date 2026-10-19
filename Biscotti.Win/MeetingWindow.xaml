@@ -17,6 +17,9 @@
             <TextBox x:Name="TitleBox" FontSize="22" FontWeight="SemiBold"
                      Background="Transparent" BorderThickness="0"
                      Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}"/>
+            <TextBlock x:Name="LiveStatus" Text="Recording · transcript updates as speech is recognized"
+                       Foreground="#277D5E" FontSize="12" Margin="0,4,0,0"
+                       Visibility="Collapsed"/>
             <TextBlock Foreground="#668">
                 <Run Text="{Binding StartedUtc, StringFormat='{}{0:yyyy-MM-dd  HH:mm}'}"/>
             </TextBlock>
@@ -24,7 +27,7 @@
 
         <TabControl Grid.Row="1" Margin="0,12,0,0">
             <TabItem Header="Transcript">
-                <ScrollViewer>
+                <ScrollViewer x:Name="TranscriptScroller">
                     <ItemsControl x:Name="TranscriptList" ItemsSource="{Binding Transcript}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
@@ -45,7 +48,7 @@
             </TabItem>
             <TabItem Header="Summary">
                 <ScrollViewer>
-                    <TextBox x:Name="SummaryBox" Text="{Binding Summary, UpdateSourceTrigger=PropertyChanged}"
+                <TextBox x:Name="SummaryBox" Text="{Binding Summary, UpdateSourceTrigger=PropertyChanged}"
                              AcceptsReturn="True" TextWrapping="Wrap" Background="Transparent"
                              BorderThickness="0" FontSize="14"
                              VerticalScrollBarVisibility="Auto"/>
@@ -60,8 +63,8 @@
         </TabControl>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="Delete meeting" Padding="14,6" Background="#FDECEA" BorderThickness="0" Click="Delete_Click"/>
-            <Button Content="Save" Padding="14,6" Margin="10,0,0,0" Click="Save_Click"/>
+            <Button x:Name="DeleteButton" Content="Delete meeting" Padding="14,6" Background="#FDECEA" BorderThickness="0" Click="Delete_Click"/>
+            <Button x:Name="SaveButton" Content="Save" Padding="14,6" Margin="10,0,0,0" Click="Save_Click"/>
         </StackPanel>
     </Grid>
 </Window>

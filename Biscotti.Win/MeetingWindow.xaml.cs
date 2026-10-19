@@ -10,11 +10,34 @@ namespace Biscotti.Win
     {
         private readonly Meeting _meeting;
 
-        public MeetingWindow(Meeting meeting)
+        public MeetingWindow(Meeting meeting, bool isLiveRecording = false)
         {
             InitializeComponent();
             _meeting = meeting;
             DataContext = meeting;
+            LiveStatus.Visibility = isLiveRecording ? Visibility.Visible : Visibility.Collapsed;
+            DeleteButton.IsEnabled = !isLiveRecording;
+            SaveButton.IsEnabled = !isLiveRecording;
+            TitleBox.IsReadOnly = isLiveRecording;
+            SummaryBox.IsReadOnly = isLiveRecording;
+            NotesBox.IsReadOnly = isLiveRecording;
+        }
+
+        public void RefreshTranscript()
+        {
+            TranscriptList.ItemsSource = null;
+            TranscriptList.ItemsSource = _meeting.Transcript;
+            TranscriptScroller.ScrollToEnd();
+        }
+
+        public void SetRecordingComplete()
+        {
+            LiveStatus.Visibility = Visibility.Collapsed;
+            DeleteButton.IsEnabled = true;
+            SaveButton.IsEnabled = true;
+            TitleBox.IsReadOnly = false;
+            SummaryBox.IsReadOnly = false;
+            NotesBox.IsReadOnly = false;
         }
 
         private void Save_Click(object sender, RoutedEventArgs e)

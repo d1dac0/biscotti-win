@@ -30,7 +30,7 @@ public sealed class DualChannelRecorder : IDisposable
     public string? SysWavPath { get; private set; }
 
     /// <summary>Bytes written per channel since Start — zero means that channel is dead.</summary>
-    public (long mic, long sys) TotalBytes => (_micBytes, _sysBytes);
+    public (long mic, long sys) TotalBytes => (Interlocked.Read(ref _micBytes), Interlocked.Read(ref _sysBytes));
 
     /// <summary>
     /// Why the mic channel is missing audio, or null when it opened fine.
@@ -119,14 +119,14 @@ public sealed class DualChannelRecorder : IDisposable
     {
         // Shared-mode resampling already matches the whisper input format.
         _micWav!.Append(e.Buffer.AsMemory(0, e.BytesRecorded));
-        _micBytes += e.BytesRecorded;
+        Interlocked.Add(ref _micBytes, e.BytesRecorded);
     }
 
     private void ConvertedMicDataAvailable(object? sender, WaveInEventArgs e)
     {
         var mono16k = _micDecimator!.ProcessInt16(e.Buffer, e.BytesRecorded, _micChannels);
         _micWav!.Append(mono16k);
-        _micBytes += mono16k.Length;
+        Interlocked.Add(ref _micBytes, mono16k.Length);
     }
 
     private void StartLoopback(string? preferredSpeakerId)
@@ -143,7 +143,7 @@ public sealed class DualChannelRecorder : IDisposable
     {
         var mono16k = _sysDecimator!.ProcessFloat(e.Buffer, e.BytesRecorded, _loopback!.WaveFormat.Channels);
         _sysWav!.Append(mono16k);
-        _sysBytes += mono16k.Length;
+        Interlocked.Add(ref _sysBytes, mono16k.Length);
     }
 
     private static MMDevice GetLoopDevice(string? preferredId)

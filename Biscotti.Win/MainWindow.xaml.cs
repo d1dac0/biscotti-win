@@ -13,6 +13,7 @@ namespace Biscotti.Win
         private readonly MeetingService _meetings;
         private readonly AppSettings _settings;
         private bool _recording;
+        private MeetingWindow? _liveMeetingWindow;
         private readonly System.Windows.Threading.DispatcherTimer _healthTimer;
 
         public MainWindow()
@@ -22,7 +23,12 @@ namespace Biscotti.Win
             WhisperRuntimeConfigurator.Apply(_settings); // before any WhisperFactory is created
             _meetings = new MeetingService(_settings);
             _meetings.StateChanged += (state, msg) => Dispatcher.Invoke(() => StatusText.Text = msg);
-            _meetings.CurrentMeetingUpdated += m => Dispatcher.Invoke(() => RefreshList(m));
+            _meetings.CurrentMeetingUpdated += m => Dispatcher.Invoke(() =>
+            {
+                RefreshList(m);
+                if (_liveMeetingWindow?.IsVisible == true && _liveMeetingWindow.DataContext is Meeting live && live.Id == m.Id)
+                    _liveMeetingWindow.RefreshTranscript();
+            });
             RefreshList();
             UpdateModelButtons();
             var model = CurrentOrPreferredModel();
@@ -162,6 +168,12 @@ namespace Biscotti.Win
                     _meetings.StartRecording();
                     _recording = true;
                     _recordingStartedUtc = DateTime.UtcNow;
+                    if (_meetings.Current is { } meeting)
+                    {
+                        _liveMeetingWindow = new MeetingWindow(meeting, isLiveRecording: true) { Owner = this };
+                        _liveMeetingWindow.Closed += (_, _) => _liveMeetingWindow = null;
+                        _liveMeetingWindow.Show();
+                    }
                     RecordButton.Content = "■  Stop";
                     RecordButton.Background = new SolidColorBrush(Color.FromRgb(0x27, 0x7D, 0x5E));
                     _healthTimer.Start();
@@ -188,6 +200,7 @@ namespace Biscotti.Win
             }
             finally
             {
+                _liveMeetingWindow?.SetRecordingComplete();
                 UpdateModelButtons();
             }
         }
