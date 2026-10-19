@@ -22,7 +22,7 @@ summarize locally.
 **Goal:** long meetings stay complete, private, and robust: long audio,
 long transcripts, at-rest privacy, hardware changes mid-meeting.
 
-- [ ] #10 Scripted test-meeting fixture for transcript determinism checks
+- [x] #10 Scripted test-meeting fixture for transcript determinism checks (PR #39)
 - [ ] #17 Encrypt meeting data at rest with DPAPI
 - [ ] #16 Map-reduce chunked summaries so long meetings are not truncated
 - [ ] #15 Live incremental transcription while the meeting is running
