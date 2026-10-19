@@ -20,8 +20,4 @@
     <InternalsVisibleTo Include="Biscotti.Tests" />
   </ItemGroup>
 
-  <ItemGroup>
-    <InternalsVisibleTo Include="Biscotti.Tests" />
-  </ItemGroup>
-
 </Project>

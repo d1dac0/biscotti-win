@@ -57,6 +57,9 @@ public sealed class DualChannelRecorder : IDisposable
     {
         MicWavPath = micWavPath;
         SysWavPath = sysWavPath;
+        _micBytes = 0;
+        _sysBytes = 0;
+        MicError = null;
         _micWav = new WavStreamWriter(micWavPath);
         _sysWav = new WavStreamWriter(sysWavPath);
 
@@ -76,6 +79,7 @@ public sealed class DualChannelRecorder : IDisposable
             BufferMilliseconds = 50,
         };
         _mic.DataAvailable += NativeMicDataAvailable;
+        string? firstError = null;
         try
         {
             _mic.StartRecording();
@@ -83,7 +87,9 @@ public sealed class DualChannelRecorder : IDisposable
         }
         catch (Exception ex)
         {
-            MicError = $"16 kHz capture refused: {ex.Message}";
+            // Recoverable: remember why we fell back, but the channel is
+            // healthy if 48 kHz works, so MicError stays null.
+            firstError = ex.Message;
         }
         _mic.DataAvailable -= NativeMicDataAvailable;
         _mic.Dispose();
@@ -107,7 +113,7 @@ public sealed class DualChannelRecorder : IDisposable
             // Both rates refused (device gone, exclusive-mode hold, etc):
             // keep the system channel recording and report the dead mic
             // instead of aborting the whole meeting.
-            MicError = $"48 kHz fallback failed too: {ex.Message}";
+            MicError = $"Mic unavailable (48 kHz fallback failed: {ex.Message}; 16 kHz: {firstError})";
             _mic.DataAvailable -= ConvertedMicDataAvailable;
             _mic.Dispose();
             _mic = null;
@@ -141,7 +147,7 @@ public sealed class DualChannelRecorder : IDisposable
 
     private void LoopbackDataAvailable(object? sender, WaveInEventArgs e)
     {
-        var mono16k = _sysDecimator!.ProcessFloat(e.Buffer, e.BytesRecorded, _loopback!.WaveFormat.Channels);
+        var mono16k = _sysDecimator!.ProcessFloat(e.Buffer, e.BytesRecorded, _sysChannels);
         _sysWav!.Append(mono16k);
         _sysBytes += mono16k.Length;
     }

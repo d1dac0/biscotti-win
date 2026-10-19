@@ -163,13 +163,13 @@ public class CrashSafetyTests
         // so the probe must open with write sharing.
         using var fs = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         var riff = new byte[4];
-        fs.Read(riff, 0, 4);
+        fs.ReadExactly(riff, 0, 4);
         Assert.Equal(new byte[] { (byte)'R', (byte)'I', (byte)'F', (byte)'F' }, riff);
         var header = new byte[4];
-        fs.Read(header, 0, 4); // riffSize
+        fs.ReadExactly(header, 0, 4); // riffSize
         var riffSize = BitConverter.ToUInt32(header, 0);
         fs.Seek(40, SeekOrigin.Begin);
-        fs.Read(header, 0, 4);
+        fs.ReadExactly(header, 0, 4);
         var dataSize = BitConverter.ToUInt32(header, 0);
         Assert.Equal(expected, dataSize);
         Assert.Equal(36u + expected, riffSize);
