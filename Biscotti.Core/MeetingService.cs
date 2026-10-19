@@ -38,8 +38,9 @@ public sealed class MeetingService : IAsyncDisposable
 
     /// <summary>Live per-channel byte counts for the UI's recording-health readout (issue #21).</summary>
     public (long mic, long sys) RecordingStats => _recorder.TotalBytes;
+    public string SystemAudioStatus => _recorder.SystemAudioStatus;
 
-    public void StartRecording()
+    public async Task StartRecordingAsync(int? targetProcessId = null, string? targetProcessName = null)
     {
         if (State == RecordingState.Recording) throw new InvalidOperationException("Already recording.");
         var (meeting, dir) = MeetingStore.CreateNew();
@@ -47,11 +48,13 @@ public sealed class MeetingService : IAsyncDisposable
         _current = meeting;
         _currentDir = dir;
         _recordingByteBaseline = _recorder.TotalBytes;
-        _recorder.Start(
+        await _recorder.StartAsync(
             Path.Combine(dir, "mic.wav"),
             Path.Combine(dir, "sys.wav"),
             _settings.MicDeviceIndex,
-            _settings.SpeakerDeviceId);
+            _settings.SpeakerDeviceId,
+            targetProcessId,
+            targetProcessName);
         _liveTranscription = new LiveTranscriptionWorker(
             Path.Combine(dir, "mic.wav"),
             Path.Combine(dir, "sys.wav"),
@@ -63,7 +66,7 @@ public sealed class MeetingService : IAsyncDisposable
             _settings.GetResolvedModelPath());
         _liveTranscription.LinesReady += AppendLiveLines;
         _liveTranscription.Start();
-        SetState(RecordingState.Recording, "Recording… click Stop when the call ends.");
+        SetState(RecordingState.Recording, $"Recording… {_recorder.SystemAudioStatus}");
     }
 
     private void AppendLiveLines(IReadOnlyList<TranscriptLine> lines)

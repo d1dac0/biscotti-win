@@ -1,14 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net9.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="NAudio" Version="3.2.0" />
     <!-- CPU-only Whisper runtime bundled by default: works on every Windows
          machine (issue #3). The opt-in GPU/CUDA tier is NOT a package ref —
          it is downloaded lazily into %LOCALAPPDATA%\BiscottiWin\runtimes by

@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Diagnostics;
 using Biscotti.Core;
 using Biscotti.Core.Models;
 using Biscotti.Core.Storage;
@@ -19,6 +20,10 @@ namespace Biscotti.Win
         public MainWindow()
         {
             InitializeComponent();
+            RefreshAudioApps();
+            AudioCaptureHint.Text = Environment.OSVersion.Version.Build < 22000
+                ? "Windows 10 captures all speaker audio. Mute notifications and music during the meeting."
+                : "Choose the meeting app to capture only its audio; without a selection, all speaker audio is captured.";
             _settings = AppSettings.Load();
             WhisperRuntimeConfigurator.Apply(_settings); // before any WhisperFactory is created
             _meetings = new MeetingService(_settings);
@@ -128,7 +133,7 @@ namespace Biscotti.Win
             if (mic == 0 && sys == 0) warning = "  ⚠ no audio captured on either channel — check microphone in Windows sound settings";
             else if (mic == 0) warning = "  ⚠ mic silent";
             else if (sys == 0) warning = "  ⚠ system audio not detected — is anything playing?";
-            StatusText.Text = $"Recording… {elapsed:hh\\:mm\\:ss} · mic {micMb} MB · speaker {sysMb} MB{warning}";
+            StatusText.Text = $"Recording… {elapsed:hh\\:mm\\:ss} · mic {micMb} MB · speaker {sysMb} MB{warning} · {_meetings.SystemAudioStatus}";
         }
 
         private ModelStore.WhisperModel CurrentOrPreferredModel() =>
@@ -165,8 +170,10 @@ namespace Biscotti.Win
             {
                 try
                 {
-                    _meetings.StartRecording();
+                    var selectedApp = AudioAppPicker.SelectedItem as AudioAppChoice;
+                    await _meetings.StartRecordingAsync(selectedApp?.ProcessId, selectedApp?.ProcessName);
                     _recording = true;
+                    AudioAppPicker.IsEnabled = false;
                     _recordingStartedUtc = DateTime.UtcNow;
                     if (_meetings.Current is { } meeting)
                     {
@@ -186,6 +193,7 @@ namespace Biscotti.Win
             }
 
             _recording = false;
+            AudioAppPicker.IsEnabled = true;
             _healthTimer.Stop();
             RecordButton.Content = "●  Start recording";
             RecordButton.Background = new SolidColorBrush(Color.FromRgb(0xC0, 0x39, 0x2B));
@@ -233,6 +241,34 @@ namespace Biscotti.Win
             }
         }
 
+        private void RefreshAudioApps_Click(object sender, RoutedEventArgs e) => RefreshAudioApps();
+
+        private void RefreshAudioApps()
+        {
+            var selectedPid = (AudioAppPicker.SelectedItem as AudioAppChoice)?.ProcessId;
+            var choices = new List<AudioAppChoice> { new(null, null, "All speaker audio (device loopback)") };
+            foreach (var process in Process.GetProcesses())
+            {
+                using (process)
+                {
+                    try
+                    {
+                        if (process.Id == Environment.ProcessId || string.IsNullOrWhiteSpace(process.MainWindowTitle))
+                            continue;
+                        var processName = process.ProcessName;
+                        choices.Add(new AudioAppChoice(process.Id, processName,
+                            $"{process.MainWindowTitle} — {processName} (PID {process.Id})"));
+                    }
+                    catch (InvalidOperationException) { }
+                    catch (System.ComponentModel.Win32Exception) { }
+                }
+            }
+
+            AudioAppPicker.ItemsSource = choices.OrderBy(c => c.ProcessId.HasValue ? 1 : 0)
+                .ThenBy(c => c.DisplayName, StringComparer.CurrentCultureIgnoreCase).ToList();
+            AudioAppPicker.SelectedItem = choices.FirstOrDefault(c => c.ProcessId == selectedPid) ?? choices[0];
+        }
+
         private void MeetingList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             // single-click just previews status; double-click opens for editing
@@ -245,4 +281,6 @@ namespace Biscotti.Win
             RefreshList();
         }
     }
+
+    internal sealed record AudioAppChoice(int? ProcessId, string? ProcessName, string DisplayName);
 }
