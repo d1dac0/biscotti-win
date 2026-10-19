@@ -13,5 +13,8 @@
   {"name":"area:ai","color":"FEF2C0","description":"Ollama summaries, action items, titles and speaker names"},
   {"name":"area:ui","color":"D4C5F9","description":"WPF meeting list, recording controls and meeting views"},
   {"name":"area:test","color":"C5DEF5","description":"Scripted playthroughs, test audio and validation"},
-  {"name":"area:platform","color":"BFDADC","description":"CI, repository workflow, packaging and distribution"}
+  {"name":"area:platform","color":"BFDADC","description":"CI, repository workflow, packaging and distribution"},
+  {"name":"in-progress","color":"fbca04","description":"A session has claimed this issue; other sessions skip it"},
+  {"name":"blocked-answer","color":"d876e3","description":"Waiting on someone outside the repo to answer"},
+  {"name":"spike","color":"1d7673","description":"Timeboxed investigation to pick between approaches"}
 ]
