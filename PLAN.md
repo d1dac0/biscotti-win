@@ -26,7 +26,7 @@ long transcripts, at-rest privacy, hardware changes mid-meeting.
 - [ ] #17 Encrypt meeting data at rest with DPAPI
 - [x] #16 Map-reduce chunked summaries so long meetings are not truncated (PR #37)
 - [x] #15 Live incremental transcription while the meeting is running (PR #41; design: [live transcription](docs/specs/live-incremental-transcription.md))
-- [x] #14 Per-app loopback capture (only the meeting app lands in the transcript; design: [per-app loopback](docs/specs/per-app-loopback-capture.md))
+- [ ] #14 Per-app loopback capture (only the meeting app lands in the transcript; design: [per-app loopback](docs/specs/per-app-loopback-capture.md))
 - [ ] #19 Device picker UI and mid-meeting device-change handling
 
 ## Phase 3: Capture the meeting context around the transcript
