@@ -9,6 +9,12 @@
 
 ## Workflow rules
 
+- Claim before work: before starting on a GitHub issue, claim it on GitHub —
+  assign yourself (`gh api repos/d1dac0/biscotti-win/issues/<n>/assignees -f
+  assignees[]=d1dac0 --method POST`) and post a short claim comment describing the
+  approach. First run `gh issue view <n> --json assignees` and re-read existing
+  comments; if another agent already claimed it, coordinate there instead of
+  starting parallel work. Claiming happens before creating the branch.
 - One branch per issue, from origin/main. Branch name: `issue-<number>-<slug>`.
 - Open a PR with `Fixes #<number>`, correct labels (exactly one `type:*`, one `priority:*`,
   relevant `area:*` — see `.github/labels.json`), then arm `gh pr merge <n> --squash --auto`.
