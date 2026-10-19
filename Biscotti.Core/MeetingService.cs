@@ -1,0 +1,95 @@
+using Biscotti.Core.Ai;
+using Biscotti.Core.Audio;
+using Biscotti.Core.Models;
+using Biscotti.Core.Storage;
+using Biscotti.Core.Transcription;
+
+namespace Biscotti.Core;
+
+/// <summary>
+/// Orchestrates one meeting end-to-end:
+/// Record (mic + system loopback) -> Transcribe (Whisper, per channel) ->
+/// Merge (speaker labeling) -> Summarize (Ollama / Gemma) -> Save.
+/// State is reported via <see cref="StateChanged"/> so the UI can show a
+/// live status without owning any of this logic.
+/// </summary>
+public sealed class MeetingService : IAsyncDisposable
+{
+    private readonly DualChannelRecorder _recorder = new();
+    private readonly AppSettings _settings;
+    private Meeting? _current;
+    private string? _currentDir;
+
+    public RecordingState State { get; private set; } = RecordingState.Idle;
+    public event Action<RecordingState, string>? StateChanged;
+    public event Action<Meeting>? CurrentMeetingUpdated;
+
+    public MeetingService(AppSettings settings) { _settings = settings; }
+
+    private void SetState(RecordingState s, string message)
+    {
+        State = s;
+        StateChanged?.Invoke(s, message);
+    }
+
+    public Meeting? Current => _current;
+
+    public void StartRecording()
+    {
+        if (State == RecordingState.Recording) throw new InvalidOperationException("Already recording.");
+        var (meeting, dir) = MeetingStore.CreateNew();
+        meeting.StartedUtc = DateTime.UtcNow;
+        _current = meeting;
+        _currentDir = dir;
+        _recorder.Start(
+            Path.Combine(dir, "mic.wav"),
+            Path.Combine(dir, "sys.wav"),
+            _settings.MicDeviceIndex,
+            _settings.SpeakerDeviceId);
+        SetState(RecordingState.Recording, "Recording… click Stop when the call ends.");
+    }
+
+    public async Task StopAndProcessAsync(CancellationToken ct = default)
+    {
+        if (State != RecordingState.Recording || _current is null)
+            throw new InvalidOperationException("Not recording.");
+
+        var (micPath, sysPath) = _recorder.Stop();
+        _current.EndedUtc = DateTime.UtcNow;
+        MeetingStore.Save(_current);
+
+        SetState(RecordingState.Transcribing, "Transcribing locally with Whisper…");
+        var transcriber = new WhisperTranscriber(_settings.GetResolvedModelPath());
+        var micLines = await transcriber.TranscribeWavAsync(micPath, "You", ct);
+        var sysLines = File.Exists(sysPath) && new FileInfo(sysPath).Length > 1000
+            ? await transcriber.TranscribeWavAsync(sysPath, "Speaker", ct)
+            : new List<TranscriptLine>();
+        transcriber.Dispose();
+
+        _current.Transcript = TranscriptAssembler.Merge(micLines, sysLines);
+        CurrentMeetingUpdated?.Invoke(_current);
+        MeetingStore.Save(_current);
+
+        SetState(RecordingState.Summarizing, "Writing summary with local AI (Ollama)…");
+        using var ollama = new OllamaService(_settings.OllamaModel);
+        var raw = await ollama.SummarizeMeetingAsync(_current.Transcript, ct);
+        if (!string.IsNullOrWhiteSpace(raw))
+        {
+            var (summary, actions, title) = SummaryParser.Parse(raw);
+            _current.Summary = summary;
+            _current.ActionItems = actions;
+            if (!string.IsNullOrWhiteSpace(title) && title.Length < 80) _current.Title = title;
+        }
+
+        SetState(RecordingState.Idle, "Done — transcript and summary saved locally.");
+        MeetingStore.Save(_current);
+        CurrentMeetingUpdated?.Invoke(_current);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { _recorder.Stop(); } catch { }
+        _recorder.Dispose();
+        await Task.CompletedTask;
+    }
+}

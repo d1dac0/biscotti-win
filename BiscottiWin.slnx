@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Biscotti.Core/Biscotti.Core.csproj" />
+  <Project Path="Biscotti.Win/Biscotti.Win.csproj" />
+</Solution>

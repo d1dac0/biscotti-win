@@ -1,0 +1,38 @@
+using Biscotti.Core.Transcription;
+
+namespace Biscotti.Core;
+
+public sealed class AppSettings
+{
+    public int? MicDeviceIndex { get; set; }
+    public string? SpeakerDeviceId { get; set; }
+    public string? WhisperModelId { get; set; } = ModelStore.LargeV3Turbo.Id;
+    public string? OllamaModel { get; set; } = "gemma3:4b";
+
+    public string GetResolvedModelPath()
+    {
+        var m = ModelStore.All.FirstOrDefault(x => x.Id == WhisperModelId) ?? ModelStore.LargeV3Turbo;
+        return ModelStore.ModelPath(m);
+    }
+
+    private static string SettingsPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "BiscottiWin", "settings.json");
+
+    public static AppSettings Load()
+    {
+        try
+        {
+            if (File.Exists(SettingsPath))
+                return System.Text.Json.JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new AppSettings();
+        }
+        catch { }
+        return new AppSettings();
+    }
+
+    public void Save()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        File.WriteAllText(SettingsPath, System.Text.Json.JsonSerializer.Serialize(this, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    }
+}
