@@ -8,6 +8,7 @@
   {"name":"priority:P2","color":"FBCA04","description":"Normal planned work or scoped follow-up"},
   {"name":"priority:P3","color":"C2E0C6","description":"Low urgency improvement; explicitly deferred"},
   {"name":"area:capture","color":"1D76DB","description":"Mic, WASAPI loopback, WAV writing and device selection"},
+  {"name":"area:storage","color":"08CCB3","description":"Meeting persistence, crash safety, encryption at rest"},
   {"name":"area:transcription","color":"006B75","description":"Whisper model download, inference and transcript assembly"},
   {"name":"area:ai","color":"FEF2C0","description":"Ollama summaries, action items, titles and speaker names"},
   {"name":"area:ui","color":"D4C5F9","description":"WPF meeting list, recording controls and meeting views"},

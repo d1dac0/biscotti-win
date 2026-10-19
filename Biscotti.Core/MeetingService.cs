@@ -37,9 +37,6 @@ public sealed class MeetingService : IAsyncDisposable
     /// <summary>Live per-channel byte counts for the UI's recording-health readout (issue #21).</summary>
     public (long mic, long sys) RecordingStats => _recorder.TotalBytes;
 
-    /// <summary>Why the mic channel is dead, or null when it is recording (issue #13).</summary>
-    public string? RecordingError => _recorder.MicError;
-
     public void StartRecording()
     {
         if (State == RecordingState.Recording) throw new InvalidOperationException("Already recording.");

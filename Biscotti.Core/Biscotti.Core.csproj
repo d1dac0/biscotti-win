@@ -9,8 +9,15 @@
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.2.1" />
+    <!-- CPU-only Whisper runtime: works on every Windows machine. Whisper.net
+         without a runtime add-on package defaults to this; the CUDA variant
+         crashed on non-CUDA machines (issue #3). GPU tier is tracked in #20. -->
     <PackageReference Include="Whisper.net" Version="1.9.0" />
-    <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.0" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Biscotti.Tests" />
   </ItemGroup>
 
   <ItemGroup>
