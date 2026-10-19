@@ -18,3 +18,5 @@ jobs:
         run: dotnet restore BiscottiWin.slnx
       - name: Build
         run: dotnet build -c Release --no-restore BiscottiWin.slnx
+      - name: Test
+        run: dotnet test -c Release --no-build BiscottiWin.slnx

@@ -13,4 +13,8 @@
     <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Biscotti.Tests" />
+  </ItemGroup>
+
 </Project>
