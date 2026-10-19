@@ -19,6 +19,8 @@ public sealed class MeetingService : IAsyncDisposable
     private readonly AppSettings _settings;
     private Meeting? _current;
     private string? _currentDir;
+    private LiveTranscriptionWorker? _liveTranscription;
+    private (long mic, long sys) _recordingByteBaseline;
 
     public RecordingState State { get; private set; } = RecordingState.Idle;
     public event Action<RecordingState, string>? StateChanged;
@@ -44,12 +46,32 @@ public sealed class MeetingService : IAsyncDisposable
         meeting.StartedUtc = DateTime.UtcNow;
         _current = meeting;
         _currentDir = dir;
+        _recordingByteBaseline = _recorder.TotalBytes;
         _recorder.Start(
             Path.Combine(dir, "mic.wav"),
             Path.Combine(dir, "sys.wav"),
             _settings.MicDeviceIndex,
             _settings.SpeakerDeviceId);
+        _liveTranscription = new LiveTranscriptionWorker(
+            Path.Combine(dir, "mic.wav"),
+            Path.Combine(dir, "sys.wav"),
+            () =>
+            {
+                var total = _recorder.TotalBytes;
+                return (total.mic - _recordingByteBaseline.mic, total.sys - _recordingByteBaseline.sys);
+            },
+            _settings.GetResolvedModelPath());
+        _liveTranscription.LinesReady += AppendLiveLines;
+        _liveTranscription.Start();
         SetState(RecordingState.Recording, "Recording… click Stop when the call ends.");
+    }
+
+    private void AppendLiveLines(IReadOnlyList<TranscriptLine> lines)
+    {
+        if (_current is null || lines.Count == 0) return;
+        _current.Transcript.AddRange(lines);
+        MeetingStore.Save(_current);
+        CurrentMeetingUpdated?.Invoke(_current);
     }
 
     public async Task StopAndProcessAsync(CancellationToken ct = default)
@@ -61,15 +83,48 @@ public sealed class MeetingService : IAsyncDisposable
         _current.EndedUtc = DateTime.UtcNow;
         MeetingStore.Save(_current);
 
-        SetState(RecordingState.Transcribing, "Transcribing locally with Whisper…");
-        var transcriber = new WhisperTranscriber(_settings.GetResolvedModelPath());
-        var micLines = await transcriber.TranscribeWavAsync(micPath, "You", ct);
-        var sysLines = File.Exists(sysPath) && new FileInfo(sysPath).Length > 1000
-            ? await transcriber.TranscribeWavAsync(sysPath, "Speaker", ct)
-            : new List<TranscriptLine>();
-        transcriber.Dispose();
+        SetState(RecordingState.Transcribing, "Finishing the live transcript…");
+        var streamSucceeded = false;
+        try
+        {
+            if (_liveTranscription is not null)
+            {
+                await _liveTranscription.CompleteAsync();
+                streamSucceeded = true;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            SetState(RecordingState.Transcribing, "Live transcription failed; retrying from the saved audio…");
+            _current.Transcript.Clear();
+        }
+        finally
+        {
+            _liveTranscription?.Dispose();
+            _liveTranscription = null;
+        }
 
-        _current.Transcript = TranscriptAssembler.Merge(micLines, sysLines);
+        if (streamSucceeded)
+        {
+            var micLines = _current.Transcript.Where(l => l.Speaker == "You").ToList();
+            var sysLines = _current.Transcript.Where(l => l.Speaker != "You").ToList();
+            _current.Transcript = TranscriptAssembler.Merge(micLines, sysLines);
+        }
+        else
+        {
+            // Defensive fallback if live transcription could not be started.
+            using var transcriber = new WhisperTranscriber(_settings.GetResolvedModelPath());
+            var micLines = await transcriber.TranscribeWavAsync(micPath, "You", ct);
+            var sysLines = File.Exists(sysPath) && new FileInfo(sysPath).Length > 1000
+                ? await transcriber.TranscribeWavAsync(sysPath, "Speaker", ct)
+                : new List<TranscriptLine>();
+            _current.Transcript = TranscriptAssembler.Merge(micLines, sysLines);
+        }
+
         CurrentMeetingUpdated?.Invoke(_current);
         MeetingStore.Save(_current);
 
@@ -95,6 +150,9 @@ public sealed class MeetingService : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         try { _recorder.Stop(); } catch { }
+        try { await (_liveTranscription?.CompleteAsync() ?? Task.CompletedTask); } catch { }
+        _liveTranscription?.Dispose();
+        _liveTranscription = null;
         _recorder.Dispose();
         await Task.CompletedTask;
     }

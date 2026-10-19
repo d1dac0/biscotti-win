@@ -32,7 +32,8 @@ public sealed class WhisperTranscriber : IDisposable
         return _factory;
     }
 
-    public async Task<List<TranscriptLine>> TranscribeWavAsync(string wavPath, string speakerLabel, CancellationToken ct = default)
+    public async Task<List<TranscriptLine>> TranscribeWavAsync(
+        string wavPath, string speakerLabel, CancellationToken ct = default, double offsetSeconds = 0)
     {
         var results = new List<TranscriptLine>();
         await using var fileReader = new FileStream(wavPath, FileMode.Open, FileAccess.Read);
@@ -46,8 +47,8 @@ public sealed class WhisperTranscriber : IDisposable
             {
                 Speaker = speakerLabel,
                 Text = seg.Text,
-                StartSeconds = seg.Start.TotalSeconds,
-                EndSeconds = seg.End.TotalSeconds,
+                StartSeconds = offsetSeconds + seg.Start.TotalSeconds,
+                EndSeconds = offsetSeconds + seg.End.TotalSeconds,
             });
         }
         return results;

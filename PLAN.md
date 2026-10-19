@@ -25,7 +25,7 @@ long transcripts, at-rest privacy, hardware changes mid-meeting.
 - [ ] #10 Scripted test-meeting fixture for transcript determinism checks
 - [ ] #17 Encrypt meeting data at rest with DPAPI
 - [x] #16 Map-reduce chunked summaries so long meetings are not truncated (PR #37)
-- [ ] #15 Live incremental transcription while the meeting is running
+- [ ] #15 Live incremental transcription while the meeting is running (design: [live transcription](docs/specs/live-incremental-transcription.md))
 - [ ] #14 Per-app loopback capture (only the meeting app lands in the transcript)
 - [ ] #19 Device picker UI and mid-meeting device-change handling
 
