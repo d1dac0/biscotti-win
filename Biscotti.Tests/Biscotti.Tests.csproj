@@ -12,10 +12,20 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <!-- Issue #10: dynamic skip for the network-gated transcription fixture
+         test (xunit 2.x has no Assert.Skip). API lives in the Xunit namespace. -->
+    <PackageReference Include="Xunit.SkippableFact" Version="1.5.23" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!-- Issue #10: the committed synthetic test-meeting fixture (16 kHz mono
+       PCM WAV, authored by tools/make-fixture.ps1). Copied next to the test
+       binaries so AppContext.BaseDirectory resolves it on any machine. -->
+  <ItemGroup>
+    <Content Include="Fixtures\test-meeting-16k.wav" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
