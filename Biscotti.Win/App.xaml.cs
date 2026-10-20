@@ -28,6 +28,8 @@ public partial class App : System.Windows.Application
     private async void OnStartup(object sender, StartupEventArgs e)
     {
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        ThemePalette.Initialize();
+        if (DesignPreview.TryShow(e.Args)) return;
 
         _instanceMutex = new Mutex(initiallyOwned: true, MutexName, out _ownsInstanceMutex);
         if (!_ownsInstanceMutex)
@@ -141,6 +143,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        ThemePalette.Dispose();
         _pipeCancellation?.Cancel();
         _pipeCancellation?.Dispose();
 

@@ -66,6 +66,7 @@ public partial class MainWindow
 
     private void InitializeGlobalHotkey()
     {
+        if (_designPreview) return;
         try
         {
             _hotkeyRegistration = new GlobalHotkeyRegistration(this);
@@ -132,6 +133,7 @@ public partial class MainWindow
 
     private void OpenLastMeetingFromShell()
     {
+        if (_designPreview) { OpenSelectedMeeting(); return; }
         ShowFromShell();
         try
         {
@@ -161,6 +163,7 @@ public partial class MainWindow
 
     private string? SaveSettingsFromDialog(string shortcut, string vocabulary)
     {
+        if (_designPreview) return null;
         var shortcutChanged = !string.Equals(shortcut, _settings.RecordingHotkey ?? "Ctrl+Alt+R", StringComparison.Ordinal);
         if (shortcutChanged && _hotkeyRegistration is null)
             return "The shortcut service is not ready yet. Try again in a moment.";

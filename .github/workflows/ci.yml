@@ -19,7 +19,7 @@ jobs:
       - name: Build
         run: dotnet build -c Release --no-restore BiscottiWin.slnx
       - name: Tests
-        run: dotnet test -c Release --no-build Biscotti.Tests
+        run: dotnet test -c Release --no-build BiscottiWin.slnx
       - name: Package and smoke-test the per-user release ZIP
         shell: pwsh
         run: |
