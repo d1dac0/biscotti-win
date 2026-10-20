@@ -49,9 +49,7 @@ namespace Biscotti.Win
                 if (_liveMeetingWindow?.IsVisible == true && _liveMeetingWindow.DataContext is Meeting live && live.Id == m.Id)
                     _liveMeetingWindow.RefreshTranscript();
             });
-            RefreshList();
-            RefreshAudioApps();
-            UpdateModelButtons();
+            Loaded += OnFirstLoaded;
             var model = CurrentOrPreferredModel();
             if (!ModelStore.IsDownloaded(model) && System.IO.File.Exists(ModelStore.ModelPath(model)))
             {
@@ -60,7 +58,40 @@ namespace Biscotti.Win
             }
             _healthTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _healthTimer.Tick += (_, _) => UpdateRecordingHealth();
+        }
+
+        private async void OnFirstLoaded(object sender, RoutedEventArgs e)
+        {
+            Loaded -= OnFirstLoaded;
+            RefreshAudioApps();
+            UpdateModelButtons();
             MaybeFirstRunGpuPrompt();
+            await LoadInitialMeetingsAsync();
+        }
+
+        private async Task LoadInitialMeetingsAsync()
+        {
+            try
+            {
+                // Legacy audio migration can read and verify large WAV files. Keep it
+                // off the startup path so the main window and tray appear immediately.
+                var meetings = await MeetingStore.LoadAllAsync();
+                var selectedId = (MeetingList.SelectedItem as Meeting)?.Id;
+                MeetingList.ItemsSource = meetings;
+                if (selectedId != Guid.Empty)
+                    MeetingList.SelectedItem = meetings.FirstOrDefault(m => m.Id == selectedId);
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "A meeting audio file could not be opened or migrated.";
+                if (!_audioLoadErrorShown)
+                {
+                    _audioLoadErrorShown = true;
+                    MessageBox.Show(this,
+                        $"A meeting's encrypted audio could not be opened or migrated. No audio was skipped or replaced.\n\n{ex.Message}\n\nAudio keys belong to the original Windows user profile. An administrator password reset can make a DPAPI key unavailable.",
+                        "Meeting audio unavailable", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
         }
 
         private bool _gpuPromptHandled;

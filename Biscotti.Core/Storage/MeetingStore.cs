@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 using Biscotti.Core.Audio;
 using Biscotti.Core.Models;
 
@@ -74,6 +75,8 @@ public static class MeetingStore
         }
         return result.OrderByDescending(m => m.StartedUtc).ToList();
     }
+
+    public static Task<List<Meeting>> LoadAllAsync() => Task.Run(LoadAll);
 
     public static void Delete(Guid id)
     {

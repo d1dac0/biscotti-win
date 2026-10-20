@@ -205,6 +205,29 @@ public class CrashSafetyTests
             MeetingStore.RootOverride = null;
         }
     }
+
+    [Fact]
+    public async Task MeetingStore_LoadAllAsync_ReturnsSavedMeetings()
+    {
+        MeetingStore.RootOverride = Path.Combine(Path.GetTempPath(), $"biscotti-test-{Guid.NewGuid()}");
+        try
+        {
+            var meeting = new Meeting { StartedUtc = DateTime.UtcNow, Title = "Async startup load" };
+            MeetingStore.Save(meeting);
+
+            var loaded = await MeetingStore.LoadAllAsync();
+
+            var match = Assert.Single(loaded);
+            Assert.Equal(meeting.Id, match.Id);
+            Assert.Equal(meeting.Title, match.Title);
+        }
+        finally
+        {
+            var dir = MeetingStore.RootOverride!;
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            MeetingStore.RootOverride = null;
+        }
+    }
 }
 
 public class TranscriptAssemblyTests
