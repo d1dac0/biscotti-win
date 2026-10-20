@@ -1,6 +1,6 @@
 # Mac parity through native Windows screens
 
-**Status:** Proposed
+**Status:** Accepted
 
 ## Decision
 
@@ -14,7 +14,8 @@ legibility and existing control behavior. Organize setup, recording, upcoming
 meetings and history into clear groups; make Settings accessible from the main
 window. Distinguish empty, working and failed states with actionable wording.
 Keep the live transcript easy to reach and retain all existing notes/audio
-controls. This decision remains proposed until the user approves the plan.
+controls. The user approved continuing autonomously on 2026-10-20 after reviewing
+the scoped plan.
 
 ## Alternatives
 

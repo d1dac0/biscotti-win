@@ -46,7 +46,8 @@ long transcripts, at-rest privacy, hardware changes mid-meeting.
 
 ## User-directed work: Mac feature parity and Windows experience (#79)
 
-**Status:** Claimed; implementation plan awaiting approval. Branch:
+**Status:** Approved for autonomous execution on 2026-10-20; implementation and local
+verification complete (99 tests and synthetic walkthrough); PR delivery in progress. Branch:
 `issue-79-mac-parity`. Initial review: 2026-10-20. See the
 [review](docs/mac-feature-parity-review.md) and
 [proposed UI decision](docs/specs/mac-parity-ui-alignment.md).
@@ -67,10 +68,23 @@ long transcripts, at-rest privacy, hardware changes mid-meeting.
    Actual Mac screenshots need a macOS capture source; source-derived diagrams
    must be labelled as such and cannot be claimed as runtime screenshots.
 
-Approval boundary: no app code changes before approval of this plan, per the
-repository's larger-task rule. Baseline build/check passed with 98 tests;
-existing warnings concern obsolete NAudio aliases and inexact reads in tests.
-No manual walkthrough or matched screenshot set has been completed yet.
+The user approved the plan and instructed the session to continue without
+waiting. Baseline build/check passed with 98 tests. #79 adds a native WPF flow
+test and synthetic preview; see the review/evidence index for final validation.
+
+### Parity follow-ups (separate issues; do not implement in #79)
+
+- #80 Guided first-run models and local AI settings (P2; recommended next).
+- #81 UI history search, organization and richer queries (P2).
+- #82 Local cross-meeting speaker identity and correction (P2).
+- #83 Explicit local import/export/copy workflows (P2).
+- #84 Retry processing and interrupted-job recovery (P2).
+- #85 Calendar context, prompts, preferences and tray previews (P2).
+- #86 Activity-aware auto-stop with countdown and user control (P2).
+- #87 Rendered Markdown and timestamp navigation (P2; audio jumps need #88).
+- #88 Persistent audio transport and seeking (P2).
+- #89 Mac runtime visual validation and Windows dark/appearance polish (P3).
+- #90 Microphone echo-control evaluation (P2).
 
 ## On-request audits
 
