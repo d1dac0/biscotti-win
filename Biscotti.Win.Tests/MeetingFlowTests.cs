@@ -51,6 +51,35 @@ public sealed class MeetingFlowTests
                 Assert.False(((Button)devices.FindName("SaveButton")).IsEnabled);
                 devices.Close();
 
+                var original = new Biscotti.Core.AppSettings();
+                var saved = false;
+                var settings = new SettingsWindow(original, _ => { saved = true; return null; }, designPreview: true);
+                settings.Show();
+                settings.Dispatcher.Invoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() => { }));
+                Assert.Equal(2, ((ComboBox)settings.FindName("WhisperBox")).Items.Count);
+                Assert.Single(((ComboBox)settings.FindName("OllamaBox")).Items);
+                Assert.Contains("ready", ((TextBlock)settings.FindName("OllamaStatus")).Text);
+                ((TextBox)settings.FindName("GuidanceBox")).Text = new string('x', 4001);
+                ((Button)settings.FindName("SaveButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.False(saved);
+                Assert.Contains(4000.ToString("N0"), ((TextBlock)settings.FindName("MessageText")).Text);
+                settings.Close();
+                Assert.Null(original.SummaryGuidance);
+                Assert.Equal("standard", original.SummaryLength);
+
+                Biscotti.Core.AppSettings? savedDraft = null;
+                var validSettings = new SettingsWindow(original, draft => { savedDraft = draft; return null; }, designPreview: true);
+                validSettings.Loaded += (_, _) => validSettings.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    ((ComboBox)validSettings.FindName("SummaryLengthBox")).SelectedItem = "brief";
+                    ((TextBox)validSettings.FindName("GuidanceBox")).Text = "Focus on decisions.";
+                    ((Button)validSettings.FindName("SaveButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                }));
+                Assert.True(validSettings.ShowDialog());
+                Assert.Equal("brief", savedDraft!.SummaryLength);
+                Assert.Equal("Focus on decisions.", savedDraft.SummaryGuidance);
+                Assert.Null(original.SummaryGuidance);
+
                 var meeting = DesignPreview.CreateMeeting();
                 meeting.Summary = null;
                 meeting.ActionItems.Clear();

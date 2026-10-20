@@ -30,9 +30,11 @@
                 <WrapPanel Margin="0,0,0,8">
                     <Button x:Name="RecordButton" MinWidth="180" Margin="0,0,10,8" Style="{StaticResource PrimaryButton}" Click="RecordButton_Click" Content="●  Start recording"/>
                     <Button x:Name="ModelButton" Margin="0,0,10,8" Click="ModelButton_Click" Content="Download Whisper model"/>
+                    <Button x:Name="CancelModelButton" Margin="0,0,10,8" Click="CancelModel_Click" Content="Cancel download" Visibility="Collapsed"/>
                     <Button x:Name="AudioDevicesButton" Margin="0,0,0,8" Content="Audio devices" Click="AudioDevicesButton_Click"/>
                 </WrapPanel>
                 <ProgressBar x:Name="ModelProgress" Height="8" Margin="0,0,0,12" Minimum="0" Maximum="100" Visibility="Collapsed" AutomationProperties.Name="Model download progress"/>
+                <TextBlock x:Name="SummaryReadinessText" Text="Check local models in Settings before your first meeting." Style="{StaticResource Hint}" Margin="0,0,0,12" AutomationProperties.LiveSetting="Polite"/>
                 <ProgressBar x:Name="ProcessingProgress" Height="8" Margin="0,0,0,12" IsIndeterminate="True" Visibility="Collapsed" AutomationProperties.Name="Local processing progress"/>
                 <Label Target="{Binding ElementName=AudioAppPicker}" Content="Meeting _app audio" Padding="0,0,0,6"/>
                 <DockPanel>

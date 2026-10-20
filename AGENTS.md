@@ -36,8 +36,9 @@ a pull request (see Git). Never work directly on `main`.
    the branch. If another agent already claimed it, coordinate in the issue
    instead of starting parallel work.
 3. **Plan the change** before writing code. Small tasks: a short list of steps
-   is enough. Larger tasks: write the plan down and have the user approve it
-   before touching code. A load-bearing decision is written in `docs/specs/`
+   is enough. Larger tasks: write the plan down, then proceed within the
+   user's authorized scope without a separate plan-approval step.
+   A load-bearing decision is written in `docs/specs/`
    before building on it.
 4. **Write the code** in small, focused commits.
 5. **Verify it before closing:** run `tools/build.ps1` and `tools/check.ps1`,

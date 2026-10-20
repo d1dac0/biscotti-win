@@ -9,6 +9,8 @@ public sealed class AppSettings
     public string? SpeakerDeviceId { get; set; }
     public string? WhisperModelId { get; set; } = ModelStore.LargeV3Turbo.Id;
     public string? OllamaModel { get; set; } = "gemma3:4b";
+    public string SummaryLength { get; set; } = "standard";
+    public string? SummaryGuidance { get; set; }
     /// <summary>Comma- or newline-separated names and terms to guide Whisper recognition.</summary>
     public string? LocalVocabulary { get; set; }
     /// <summary>
