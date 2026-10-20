@@ -155,40 +155,49 @@ public partial class MainWindow
     private void OpenSettingsFromShell()
     {
         ShowFromShell();
-        var dialog = new SettingsWindow(
-            _settings.RecordingHotkey ?? "Ctrl+Alt+R", _settings.LocalVocabulary ?? "",
-            SaveSettingsFromDialog, _hotkeyRegistrationError) { Owner = this };
+        if (_meetings.State != RecordingState.Idle || ModelProgress.Visibility == Visibility.Visible)
+        {
+            StatusText.Text = "Finish the current meeting or download before changing settings.";
+            return;
+        }
+        var dialog = new SettingsWindow(_settings, SaveSettingsFromDialog, _hotkeyRegistrationError) { Owner = this };
         dialog.ShowDialog();
+        UpdateModelButtons();
+        _ = RefreshSummaryReadinessAsync();
     }
 
-    private string? SaveSettingsFromDialog(string shortcut, string vocabulary)
+    private string? SaveSettingsFromDialog(Biscotti.Core.AppSettings candidate)
     {
         if (_designPreview) return null;
+        if (_meetings.State != RecordingState.Idle) return "Finish the current meeting before saving settings.";
+        var shortcut = candidate.RecordingHotkey ?? "Ctrl+Alt+R";
         var shortcutChanged = !string.Equals(shortcut, _settings.RecordingHotkey ?? "Ctrl+Alt+R", StringComparison.Ordinal);
         if (shortcutChanged && _hotkeyRegistration is null)
             return "The shortcut service is not ready yet. Try again in a moment.";
+        var previousRegistered = _hotkeyRegistration?.Current;
         if (_hotkeyRegistration is not null && !_hotkeyRegistration.TrySet(shortcut, out var error))
         {
             _hotkeyRegistrationError = error;
             return error;
         }
 
-        var previousSetting = _settings.RecordingHotkey;
-        var previousVocabulary = _settings.LocalVocabulary;
-        var previousRegistered = _hotkeyRegistration?.Current;
-        _settings.RecordingHotkey = shortcut;
-        _settings.LocalVocabulary = vocabulary;
         try
         {
-            _settings.Save();
+            candidate.Save();
+            var runtimeChanged = candidate.WhisperRuntime != _settings.WhisperRuntime;
+            _settings.RecordingHotkey = shortcut;
+            _settings.LocalVocabulary = candidate.LocalVocabulary;
+            _settings.WhisperModelId = candidate.WhisperModelId;
+            _settings.WhisperRuntime = candidate.WhisperRuntime;
+            _settings.OllamaModel = candidate.OllamaModel;
+            _settings.SummaryLength = candidate.SummaryLength;
+            _settings.SummaryGuidance = candidate.SummaryGuidance;
             _hotkeyRegistrationError = null;
-            StatusText.Text = "Settings saved locally.";
+            StatusText.Text = runtimeChanged ? "Settings saved locally. Restart Biscotti to apply the runtime change." : "Settings saved locally.";
             return null;
         }
         catch (Exception ex)
         {
-            _settings.RecordingHotkey = previousSetting;
-            _settings.LocalVocabulary = previousVocabulary;
             if (_hotkeyRegistration is not null)
             {
                 if (previousRegistered is null) _hotkeyRegistration.Clear();
