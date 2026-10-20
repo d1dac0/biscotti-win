@@ -17,7 +17,7 @@ namespace Biscotti.Win
         private readonly AppSettings _settings;
         private bool _recording;
         private Stopwatch? _recordingStopwatch;
-        private bool _audioLoadErrorShown;
+        private bool _meetingLoadErrorShown;
         private MeetingWindow? _liveMeetingWindow;
         private AudioDevicesWindow? _deviceDialog;
         private readonly System.Windows.Threading.DispatcherTimer _healthTimer;
@@ -90,13 +90,13 @@ namespace Biscotti.Win
             }
             catch (Exception ex)
             {
-                StatusText.Text = "A meeting audio file could not be opened or migrated.";
-                if (!_audioLoadErrorShown)
+                StatusText.Text = "Protected meeting data or audio could not be opened or migrated.";
+                if (!_meetingLoadErrorShown)
                 {
-                    _audioLoadErrorShown = true;
+                    _meetingLoadErrorShown = true;
                     MessageBox.Show(this,
-                        $"A meeting's encrypted audio could not be opened or migrated. No audio was skipped or replaced.\n\n{ex.Message}\n\nAudio keys belong to the original Windows user profile. An administrator password reset can make a DPAPI key unavailable.",
-                        "Meeting audio unavailable", MessageBoxButton.OK, MessageBoxImage.Error);
+                        $"A meeting's protected data or audio could not be opened or migrated. Loading stopped rather than silently omitting that data.\n\n{ex.Message}\n\nProtected data belongs to the Windows profile that created it. After signing into that profile, close and reopen Biscotti to retry. An administrator password reset can make DPAPI data unavailable.",
+                        "Meeting data unavailable", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }
@@ -311,13 +311,13 @@ namespace Biscotti.Win
             }
             catch (Exception ex)
             {
-                StatusText.Text = "A meeting audio file could not be opened or migrated.";
-                if (!_audioLoadErrorShown)
+                StatusText.Text = "Protected meeting data or audio could not be opened or migrated.";
+                if (!_meetingLoadErrorShown)
                 {
-                    _audioLoadErrorShown = true;
+                    _meetingLoadErrorShown = true;
                     MessageBox.Show(this,
-                        $"A meeting's encrypted audio could not be opened or migrated. No audio was skipped or replaced.\n\n{ex.Message}\n\nAudio keys belong to the original Windows user profile. An administrator password reset can make a DPAPI key unavailable.",
-                        "Meeting audio unavailable", MessageBoxButton.OK, MessageBoxImage.Error);
+                        $"A meeting's protected data or audio could not be opened or migrated. Loading stopped rather than silently omitting that data.\n\n{ex.Message}\n\nProtected data belongs to the Windows profile that created it. After signing into that profile, close and reopen Biscotti to retry. An administrator password reset can make DPAPI data unavailable.",
+                        "Meeting data unavailable", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
                 return;
             }

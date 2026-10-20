@@ -34,26 +34,26 @@ Biscotti.Win\bin\Release\net9.0-windows\Biscotti.Win.exe
 
 Everything is stored under `%LOCALAPPDATA%\BiscottiWin`:
 
-- `Meetings\<guid>\meeting.json` — structured transcript, summary, notes
-- `Meetings\<guid>\meeting.md` — human-readable copy
+- `Meetings\<guid>\meeting.json` — DPAPI-protected structured transcript, summary, notes
+- `Meetings\<guid>\meeting.md` — DPAPI-protected Markdown rendering
 - `Meetings\<guid>\mic.wav` / `sys.wav` — full audio, yours to delete
 - `Models\` — Whisper GGML model
 
-Meeting files are currently stored as plaintext. The accepted design for issue
-#17 protects `meeting.json` and `meeting.md` with Windows DPAPI for the current
-user in the release that implements it; existing meetings are migrated without
-deleting their source files until each protected replacement is verified. WAV
-audio remains plaintext in that first phase. DPAPI CurrentUser does not protect
-data from software already running as your Windows user. See the
+`meeting.json` and `meeting.md` are protected with Windows DPAPI for the current
+user; older plaintext meeting files are migrated after each protected copy is
+verified. `mic.wav` and `sys.wav` use authenticated AES-GCM containers with a
+DPAPI-protected meeting key. DPAPI CurrentUser does not protect data from
+software already running as your Windows user. See the
 [DPAPI storage decision](docs/specs/dpapi-meeting-data-at-rest.md) for migration,
-profile roaming, password-reset behavior, and the follow-up WAV design.
+profile roaming, and password-reset behavior.
 
 ## Chat with local meetings
 
 Biscotti includes a read-only MCP server that lets compatible local MCP clients
 search saved meetings, read meeting details, and page through timestamped,
-speaker-labeled transcripts. The server reads the same local `meeting.json`
-files as the app and does not open audio files or contact remote services.
+speaker-labeled transcripts. The server reads the same DPAPI-protected local
+`meeting.json` files through the app's storage boundary and does not open audio
+files or contact remote services.
 See [the MCP setup guide](docs/mcp-server.md) for build and client configuration.
 
 ## Remote speaker labels

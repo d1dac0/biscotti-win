@@ -2,6 +2,9 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Biscotti.Core.Audio;
 using Biscotti.Core.Models;
 using Biscotti.Core.Storage;
@@ -197,7 +200,16 @@ public class CrashSafetyTests
             Assert.Equal("You", match.Transcript[0].Speaker);
             Assert.Single(match.TimestampedNotes);
             Assert.Equal("Follow up on this", match.TimestampedNotes[0].Text);
-            var markdown = File.ReadAllText(Path.Combine(MeetingStore.MeetingDir(meeting.Id), "meeting.md"));
+            var markdownPath = Path.Combine(MeetingStore.MeetingDir(meeting.Id), "meeting.md");
+            var markdownFile = File.ReadAllBytes(markdownPath);
+            Assert.True(markdownFile.AsSpan().StartsWith("BISCOTTI-DPAPI:1\n"u8));
+            Assert.DoesNotContain("Follow up on this", Encoding.UTF8.GetString(markdownFile), StringComparison.Ordinal);
+            var jsonFile = File.ReadAllBytes(Path.Combine(MeetingStore.MeetingDir(meeting.Id), "meeting.json"));
+            Assert.True(jsonFile.AsSpan().StartsWith("BISCOTTI-DPAPI:1\n"u8));
+            Assert.DoesNotContain("Crash safety roundtrip", Encoding.UTF8.GetString(jsonFile), StringComparison.Ordinal);
+            var markdownBytes = ProtectedMeetingText.ReadAndMigrate(markdownPath);
+            var markdown = Encoding.UTF8.GetString(markdownBytes);
+            CryptographicOperations.ZeroMemory(markdownBytes);
             Assert.True(markdown.IndexOf("**Note**: Follow up on this", StringComparison.Ordinal)
                 < markdown.IndexOf("**You**: hello", StringComparison.Ordinal));
             // no temp leftovers
@@ -210,6 +222,143 @@ public class CrashSafetyTests
             var dir = MeetingStore.RootOverride!;
             if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
             MeetingStore.RootOverride = null;
+        }
+    }
+
+    [Fact]
+    public void MeetingStore_MigratesLegacyJsonAndMarkdownIndependently()
+    {
+        MeetingStore.RootOverride = Path.Combine(Path.GetTempPath(), $"biscotti-text-migrate-{Guid.NewGuid()}");
+        ProtectedMeetingText.ProtectorOverride = new PrefixMeetingTextProtector();
+        try
+        {
+            var meeting = new Meeting { StartedUtc = DateTime.UtcNow, Title = "Legacy meeting" };
+            meeting.Transcript.Add(new TranscriptLine { Speaker = "You", Text = "private words", StartSeconds = 1, EndSeconds = 2 });
+            var dir = MeetingStore.MeetingDir(meeting.Id);
+            Directory.CreateDirectory(dir);
+            var jsonPath = Path.Combine(dir, "meeting.json");
+            var markdownPath = Path.Combine(dir, "meeting.md");
+            var json = JsonSerializer.SerializeToUtf8Bytes(meeting, new JsonSerializerOptions { WriteIndented = true });
+            var markdown = Encoding.UTF8.GetBytes("# User-edited legacy note\n\nprivate words\n");
+            File.WriteAllBytes(jsonPath, json);
+            File.WriteAllBytes(markdownPath, markdown);
+
+            var loaded = Assert.Single(MeetingStore.LoadMetadataOnly());
+
+            Assert.Equal(meeting.Id, loaded.Id);
+            Assert.True(File.ReadAllBytes(jsonPath).AsSpan().StartsWith("BISCOTTI-DPAPI:1\n"u8));
+            Assert.True(File.ReadAllBytes(markdownPath).AsSpan().StartsWith("BISCOTTI-DPAPI:1\n"u8));
+            Assert.Equal(markdown, ProtectedMeetingText.ReadAndMigrate(markdownPath));
+            CryptographicOperations.ZeroMemory(json);
+            CryptographicOperations.ZeroMemory(markdown);
+        }
+        finally
+        {
+            var dir = MeetingStore.RootOverride!;
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            MeetingStore.RootOverride = null;
+            ProtectedMeetingText.ProtectorOverride = null;
+        }
+    }
+
+    [Fact]
+    public void MeetingStore_DoesNotTreatTamperedProtectedJsonAsPlaintextOrSkipIt()
+    {
+        MeetingStore.RootOverride = Path.Combine(Path.GetTempPath(), $"biscotti-text-tamper-{Guid.NewGuid()}");
+        ProtectedMeetingText.ProtectorOverride = new PrefixMeetingTextProtector();
+        try
+        {
+            var meeting = new Meeting { StartedUtc = DateTime.UtcNow, Title = "Protected meeting" };
+            MeetingStore.Save(meeting);
+            var jsonPath = Path.Combine(MeetingStore.MeetingDir(meeting.Id), "meeting.json");
+            var stored = File.ReadAllBytes(jsonPath);
+            stored[^1] ^= 0xFF;
+            File.WriteAllBytes(jsonPath, stored);
+
+            var error = Assert.Throws<MeetingTextStorageException>(() => MeetingStore.LoadMetadataOnly());
+
+            Assert.Contains("unprotect", error.Message);
+            Assert.Equal(stored, File.ReadAllBytes(jsonPath));
+        }
+        finally
+        {
+            var dir = MeetingStore.RootOverride!;
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            MeetingStore.RootOverride = null;
+            ProtectedMeetingText.ProtectorOverride = null;
+        }
+    }
+
+    [Fact]
+    public void MeetingStore_PreservesUnknownProtectedMarkdownVersion()
+    {
+        MeetingStore.RootOverride = Path.Combine(Path.GetTempPath(), $"biscotti-text-version-{Guid.NewGuid()}");
+        ProtectedMeetingText.ProtectorOverride = new PrefixMeetingTextProtector();
+        try
+        {
+            var dir = Path.Combine(MeetingStore.Root, Guid.NewGuid().ToString());
+            Directory.CreateDirectory(dir);
+            var markdownPath = Path.Combine(dir, "meeting.md");
+            var original = Encoding.UTF8.GetBytes("BISCOTTI-DPAPI:2\nfuture protected bytes");
+            File.WriteAllBytes(markdownPath, original);
+
+            var error = Assert.Throws<MeetingTextStorageException>(() => ProtectedMeetingText.ReadAndMigrate(markdownPath));
+
+            Assert.Contains("unsupported DPAPI envelope version", error.Message);
+            Assert.Equal(original, File.ReadAllBytes(markdownPath));
+        }
+        finally
+        {
+            var dir = MeetingStore.RootOverride!;
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            MeetingStore.RootOverride = null;
+            ProtectedMeetingText.ProtectorOverride = null;
+        }
+    }
+
+    [Fact]
+    public void MeetingStore_PreservesLegacyJsonWhenProtectedReplacementCannotBeVerified()
+    {
+        MeetingStore.RootOverride = Path.Combine(Path.GetTempPath(), $"biscotti-text-failure-{Guid.NewGuid()}");
+        ProtectedMeetingText.ProtectorOverride = new PrefixMeetingTextProtector(failUnprotect: true);
+        try
+        {
+            var meeting = new Meeting { StartedUtc = DateTime.UtcNow, Title = "Readable legacy data" };
+            var dir = MeetingStore.MeetingDir(meeting.Id);
+            Directory.CreateDirectory(dir);
+            var jsonPath = Path.Combine(dir, "meeting.json");
+            var original = JsonSerializer.SerializeToUtf8Bytes(meeting);
+            File.WriteAllBytes(jsonPath, original);
+
+            var error = Assert.Throws<MeetingTextStorageException>(() => MeetingStore.LoadMetadataOnly());
+
+            Assert.Contains("unprotect", error.Message);
+            Assert.Equal(original, File.ReadAllBytes(jsonPath));
+            Assert.False(File.Exists(jsonPath + ".tmp"));
+        }
+        finally
+        {
+            var dir = MeetingStore.RootOverride!;
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            MeetingStore.RootOverride = null;
+            ProtectedMeetingText.ProtectorOverride = null;
+        }
+    }
+
+    private sealed class PrefixMeetingTextProtector(bool failUnprotect = false) : IMeetingTextProtector
+    {
+        private const byte Prefix = 0xA5;
+
+        public byte[] Protect(byte[] plaintext) => [Prefix, .. SHA256.HashData(plaintext), .. plaintext];
+
+        public byte[] Unprotect(byte[] ciphertext)
+        {
+            if (failUnprotect || ciphertext.Length < 33 || ciphertext[0] != Prefix)
+                throw new CryptographicException("Test unprotect failure.");
+            var plaintext = ciphertext[33..];
+            if (!CryptographicOperations.FixedTimeEquals(ciphertext.AsSpan(1, 32), SHA256.HashData(plaintext)))
+                throw new CryptographicException("Test protected content was tampered with.");
+            return plaintext;
         }
     }
 

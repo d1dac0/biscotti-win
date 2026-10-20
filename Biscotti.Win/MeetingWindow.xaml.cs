@@ -214,8 +214,17 @@ namespace Biscotti.Win
 
         private void Save_Click(object sender, RoutedEventArgs e)
         {
-            MeetingStore.Save(_meeting);
-            Close();
+            try
+            {
+                MeetingStore.Save(_meeting);
+                Close();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this,
+                    $"The meeting could not be protected and saved. Keep this window open and retry after checking the Windows profile and storage permissions.\n\n{ex.Message}",
+                    "Meeting not saved", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void Delete_Click(object sender, RoutedEventArgs e)
