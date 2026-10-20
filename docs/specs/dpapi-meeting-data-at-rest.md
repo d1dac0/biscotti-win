@@ -4,7 +4,7 @@
 
 ## Decision
 
-The release that implements issue #17 will protect each meeting's `meeting.json` and `meeting.md` with Windows DPAPI using `ProtectedData.Protect` / `Unprotect` and `DataProtectionScope.CurrentUser`. The files keep their existing names. Each protected file starts with the ASCII bytes `BISCOTTI-DPAPI:1` followed by one LF byte (`0x0A`), then the DPAPI blob. Bytes after the marker are never interpreted as plaintext unless `Unprotect` succeeds. A file without the marker is a legacy plaintext file and is eligible for migration. `mic.wav` and `sys.wav` remain plaintext in this phase; the WAV protection preview below is follow-up work, not a claim that current recordings are encrypted.
+The application protects each meeting's `meeting.json` and `meeting.md` with Windows DPAPI using `ProtectedData.Protect` / `Unprotect` and `DataProtectionScope.CurrentUser`. The files keep their existing names. Each protected file starts with the ASCII bytes `BISCOTTI-DPAPI:1` followed by one LF byte (`0x0A`), then the DPAPI blob. Bytes after the marker are never interpreted as plaintext unless `Unprotect` succeeds. A file without the marker is a legacy plaintext file and is eligible for migration. Audio is protected separately under the accepted [encrypted audio streams decision](encrypted-audio-streams.md), implemented in issue #45.
 
 ## File handling and migration
 
@@ -22,15 +22,13 @@ The release that implements issue #17 will protect each meeting's `meeting.json`
 
 ## Why
 
-The structured JSON and Markdown export are the small, discrete text files that contain searchable meeting content. Current-user DPAPI protects those files from direct reading by other local accounts and from offline inspection of copied files, while retaining atomic replacement and the existing storage layout. It does not protect against software already running as the same Windows user: such software can request DPAPI decryption too. It also does not encrypt the audio left in WAV files during this phase.
+The structured JSON and Markdown export are the small, discrete text files that contain searchable meeting content. Current-user DPAPI protects those files from direct reading by other local accounts and from offline inspection of copied files, while retaining atomic replacement and the existing storage layout. It does not protect against software already running as the same Windows user: such software can request DPAPI decryption too. Audio protection is specified separately and does not change the format decision for meeting text.
 
 DPAPI is tied to the user's Windows credentials and normally to the machine. Microsoft documents an exception for roaming profiles, which may allow decryption on another machine carrying that profile. An administrator password reset can make previously protected data unavailable when the relevant DPAPI recovery material is unavailable; this must be treated as a visible data-access error, not an empty or corrupt meeting. The app must not promise cross-machine recovery.
 
-## Follow-up preview: WAV streaming protection
+## Related decision: WAV streaming protection (#45)
 
-Track audio protection in [issue #45](https://github.com/d1dac0/biscotti-win/issues/45), separate from this base spec. Do not call DPAPI on the active WAV stream. Generate one cryptographically random 256-bit AES key per meeting session, encrypt audio inline as it is captured, and wrap only that session key with DPAPI `CurrentUser`. Store the wrapped key and format metadata in the protected meeting metadata or the audio container header. The recorder and live transcriber must consume the encrypted stream through a bounded streaming adapter; no plaintext WAV should be left at rest after the encrypted path is enabled.
-
-Prefer authenticated AES-GCM framing for the audio stream so each bounded frame has a unique nonce and its own authentication tag. A standard `CryptoStream` pipeline must not be assumed to provide AES-GCM framing: .NET's `AesGcm` operation writes ciphertext and tag to separate buffers and requires a unique nonce for each operation. The follow-up must define framing, nonce derivation, tag verification, crash recovery, and Whisper's read path before implementation. If a CryptoStream-compatible counter-mode transform is selected instead, it must include independent authentication; unauthenticated CTR is not acceptable.
+Issue #45 implemented the separate audio decision in [encrypted-audio-streams.md](encrypted-audio-streams.md). That decision specifies authenticated AES-GCM framing, DPAPI-wrapped meeting keys, crash recovery, migration, and the decrypting WAV-compatible reader used by recording and transcription.
 
 ## References
 

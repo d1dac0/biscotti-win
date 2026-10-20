@@ -10,7 +10,7 @@ namespace Biscotti.Core.Storage;
 /// <summary>
 /// Meetings live under %LOCALAPPDATA%\BiscottiWin\Meetings\<id>\:
 ///   meeting.json — structured data (transcript, summary, notes)
-///   meeting.md   — human-readable copy you can open in any editor
+///   meeting.md   — protected, human-readable Markdown copy
 ///   mic.wav / sys.wav — full audio, kept unless the user deletes the meeting
 /// </summary>
 public static class MeetingStore
@@ -44,17 +44,15 @@ public static class MeetingStore
     {
         var dir = MeetingDir(m.Id);
         Directory.CreateDirectory(dir);
-        // Atomic on NTFS: write the full copy beside the target, then rename over
-        // it. A kill mid-write leaves the previous good copy intact (issue #12).
         var jsonPath = Path.Combine(dir, "meeting.json");
-        var tmp = jsonPath + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(m, JsonOpts));
-        File.Move(tmp, jsonPath, overwrite: true);
+        var json = JsonSerializer.SerializeToUtf8Bytes(m, JsonOpts);
+        try { ProtectedMeetingText.WriteProtectedAtomically(jsonPath, json); }
+        finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(json); }
 
         var mdPath = Path.Combine(dir, "meeting.md");
-        var mdTmp = mdPath + ".tmp";
-        File.WriteAllText(mdTmp, RenderMarkdown(m), new UTF8Encoding(false));
-        File.Move(mdTmp, mdPath, overwrite: true);
+        var markdown = new UTF8Encoding(false).GetBytes(RenderMarkdown(m));
+        try { ProtectedMeetingText.WriteProtectedAtomically(mdPath, markdown); }
+        finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(markdown); }
     }
 
     public static List<Meeting> LoadAll()
@@ -72,19 +70,89 @@ public static class MeetingStore
     private static List<(string Directory, Meeting Meeting)> ReadMeetingMetadata()
     {
         var result = new List<(string Directory, Meeting Meeting)>();
-        if (!Directory.Exists(Root)) return result;
-        foreach (var dir in Directory.EnumerateDirectories(Root))
+        string[] directories;
+        try
+        {
+            if (!TryGetDirectory(Root)) return result;
+            directories = Directory.GetDirectories(Root);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw MeetingTextStorageException.For(Root, "list meeting directories in", ex);
+        }
+
+        foreach (var dir in directories)
         {
             var json = Path.Combine(dir, "meeting.json");
-            if (!File.Exists(json)) continue;
+            var markdown = Path.Combine(dir, "meeting.md");
+            var hasJson = TryGetFile(json);
+            var hasMarkdown = TryGetFile(markdown);
+            if (!hasJson && !hasMarkdown) continue;
+            if (!hasJson)
+                throw MeetingTextStorageException.For(json, "read", new FileNotFoundException(
+                    "The meeting has a Markdown copy but no structured meeting.json file."));
+
+            var bytes = ProtectedMeetingText.ReadAndMigrate(json, ValidateLegacyJson);
+            Meeting meeting;
             try
             {
-                var meeting = JsonSerializer.Deserialize<Meeting>(File.ReadAllText(json), JsonOpts)!;
-                result.Add((dir, meeting));
+                meeting = JsonSerializer.Deserialize<Meeting>(bytes, JsonOpts)
+                    ?? throw new InvalidDataException("The meeting JSON contained no meeting record.");
             }
-            catch (JsonException) { /* skip corrupt meeting metadata */ }
+            catch (Exception ex) when (ex is JsonException or InvalidDataException)
+            {
+                throw MeetingTextStorageException.For(json, "read", ex);
+            }
+            finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(bytes); }
+
+            result.Add((dir, meeting));
+
+            if (hasMarkdown)
+            {
+                var markdownBytes = ProtectedMeetingText.ReadAndMigrate(markdown);
+                System.Security.Cryptography.CryptographicOperations.ZeroMemory(markdownBytes);
+            }
         }
         return result.OrderByDescending(record => record.Meeting.StartedUtc).ToList();
+    }
+
+    private static bool TryGetDirectory(string path)
+    {
+        FileAttributes attributes;
+        try { attributes = File.GetAttributes(path); }
+        catch (FileNotFoundException) { return false; }
+        catch (DirectoryNotFoundException) { return false; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw MeetingTextStorageException.For(path, "inspect meeting storage", ex);
+        }
+        if ((attributes & FileAttributes.Directory) == 0)
+            throw MeetingTextStorageException.For(path, "inspect meeting storage",
+                new InvalidDataException("The meeting storage path is not a directory."));
+        return true;
+    }
+
+    private static bool TryGetFile(string path)
+    {
+        FileAttributes attributes;
+        try { attributes = File.GetAttributes(path); }
+        catch (FileNotFoundException) { return false; }
+        catch (DirectoryNotFoundException) { return false; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw MeetingTextStorageException.For(path, "inspect", ex);
+        }
+        if ((attributes & FileAttributes.Directory) != 0)
+            throw MeetingTextStorageException.For(path, "inspect",
+                new InvalidDataException("A directory exists where a meeting data file was expected."));
+        return true;
+    }
+
+    private static void ValidateLegacyJson(byte[] bytes)
+    {
+        var meeting = JsonSerializer.Deserialize<Meeting>(bytes, JsonOpts);
+        if (meeting is null)
+            throw new InvalidDataException("The meeting JSON contained no meeting record.");
     }
 
     public static Task<List<Meeting>> LoadAllAsync() => Task.Run(LoadAll);
