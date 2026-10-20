@@ -23,7 +23,7 @@ summarize locally.
 long transcripts, at-rest privacy, hardware changes mid-meeting.
 
 - [ ] #10 Scripted test-meeting fixture for transcript determinism checks
-- [ ] #17 Encrypt meeting data at rest with DPAPI
+- [ ] #17 Encrypt meeting data at rest with DPAPI (decision: [DPAPI meeting text files](docs/specs/dpapi-meeting-data-at-rest.md))
 - [x] #16 Map-reduce chunked summaries so long meetings are not truncated (PR #37)
 - [ ] #15 Live incremental transcription while the meeting is running (design: [live transcription](docs/specs/live-incremental-transcription.md))
 - [ ] #14 Per-app loopback capture (only the meeting app lands in the transcript)
