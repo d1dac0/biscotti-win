@@ -15,6 +15,7 @@ namespace Biscotti.Win
         private readonly MeetingService _meetings;
         private readonly AppSettings _settings;
         private bool _recording;
+        private Stopwatch? _recordingStopwatch;
         private bool _audioLoadErrorShown;
         private MeetingWindow? _liveMeetingWindow;
         private AudioDevicesWindow? _deviceDialog;
@@ -130,8 +131,6 @@ namespace Biscotti.Win
             }
         }
 
-        private DateTime _recordingStartedUtc;
-
         private void UpdateDeviceControls()
         {
             var canEdit = _meetings.State == RecordingState.Idle;
@@ -162,14 +161,15 @@ namespace Biscotti.Win
         {
             if (!_recording) return;
             var (mic, sys) = _meetings.RecordingStats;
-            var elapsed = DateTime.UtcNow - _recordingStartedUtc;
+            var elapsed = _recordingStopwatch?.Elapsed ?? TimeSpan.Zero;
+            RecordingDurationText.Text = $"Recording duration  {MeetingTimeDisplay.FormatDuration(elapsed)}";
             var micMb = (mic / 1024.0 / 1024.0).ToString("0.0");
             var sysMb = (sys / 1024.0 / 1024.0).ToString("0.0");
             var warning = "";
             if (mic == 0 && sys == 0) warning = "  ⚠ no audio captured on either channel — check microphone in Windows sound settings";
             else if (mic == 0) warning = "  ⚠ mic silent";
             else if (sys == 0) warning = "  ⚠ system audio not detected — is anything playing?";
-            StatusText.Text = $"Recording… {elapsed:hh\\:mm\\:ss} · mic {micMb} MB · speaker {sysMb} MB{warning} · {_meetings.SystemAudioStatus} · {_meetings.AutoStopStatus}";
+            StatusText.Text = $"Recording health · mic {micMb} MB · speaker {sysMb} MB{warning} · {_meetings.SystemAudioStatus} · {_meetings.AutoStopStatus}";
             DeviceWarningText.Text = _meetings.RecordingDeviceWarning;
             DeviceWarningText.Visibility = string.IsNullOrEmpty(DeviceWarningText.Text) ? Visibility.Collapsed : Visibility.Visible;
         }
@@ -230,7 +230,8 @@ namespace Biscotti.Win
                     await _meetings.StartRecordingAsync(selectedApp?.ProcessId, selectedApp?.ProcessName);
                     _recording = true;
                     AudioAppPicker.IsEnabled = false;
-                    _recordingStartedUtc = DateTime.UtcNow;
+                    _recordingStopwatch = Stopwatch.StartNew();
+                    RecordingDurationText.Visibility = Visibility.Visible;
                     if (_meetings.Current is { } meeting)
                     {
                         _liveMeetingWindow = new MeetingWindow(meeting, isLiveRecording: true) { Owner = this };
@@ -240,6 +241,7 @@ namespace Biscotti.Win
                     RecordButton.Content = "■  Stop";
                     RecordButton.Background = new SolidColorBrush(Color.FromRgb(0x27, 0x7D, 0x5E));
                     _healthTimer.Start();
+                    UpdateRecordingHealth();
                 }
                 catch (AudioDeviceException ex)
                 {
@@ -261,6 +263,9 @@ namespace Biscotti.Win
             _recording = false;
             AudioAppPicker.IsEnabled = true;
             _healthTimer.Stop();
+            _recordingStopwatch?.Stop();
+            _recordingStopwatch = null;
+            RecordingDurationText.Visibility = Visibility.Collapsed;
             RecordButton.Content = "●  Start recording";
             RecordButton.Background = new SolidColorBrush(Color.FromRgb(0xC0, 0x39, 0x2B));
             RecordButton.IsEnabled = false;

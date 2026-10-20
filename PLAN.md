@@ -30,6 +30,7 @@ long transcripts, at-rest privacy, hardware changes mid-meeting.
 - [x] #48 Play encrypted microphone and system audio in the meeting window (PR #52)
   - Plan: expose the existing authenticated decrypting stream to playback; add independent microphone/system play-stop controls; surface missing, corrupt, or unavailable-key errors; cover stream and failure handling without audio hardware.
 - [x] #19 Device picker UI and mid-meeting device-change handling (PR #49; decision: [audio device selection](docs/specs/audio-device-selection.md))
+- [ ] #54 Show recording duration and local start time
 
 ## Phase 3: Capture the meeting context around the transcript
 

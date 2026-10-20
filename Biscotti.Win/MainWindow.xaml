@@ -1,8 +1,13 @@
 ﻿<Window x:Class="Biscotti.Win.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Biscotti.Win"
         Title="Biscotti Win — private meeting notes" Height="600" Width="880"
         Background="#FAF9F6">
+    <Window.Resources>
+        <local:LocalStartTimeConverter x:Key="LocalStartTime"/>
+        <local:MeetingDurationConverter x:Key="MeetingDuration"/>
+    </Window.Resources>
     <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -14,6 +19,9 @@
 
         <StackPanel Grid.Row="0">
             <TextBlock Text="🍅 Biscotti Win" FontSize="26" FontWeight="SemiBold"/>
+            <TextBlock x:Name="RecordingDurationText" Foreground="#277D5E" FontSize="15"
+                       FontWeight="SemiBold" Margin="0,6,0,0" Visibility="Collapsed"
+                       AutomationProperties.LiveSetting="Polite"/>
             <TextBlock x:Name="StatusText" Foreground="#555" Margin="0,6,0,0"
                        Text="All local. Nothing leaves this PC." TextWrapping="Wrap"/>
         </StackPanel>
@@ -49,9 +57,11 @@
                     <Border Padding="10,8">
                         <StackPanel>
                             <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold"/>
+                            <TextBlock Foreground="#668" FontSize="12"
+                                       Text="{Binding StartedUtc, Converter={StaticResource LocalStartTime}}"/>
                             <TextBlock Foreground="#668" FontSize="12">
-                                <Run Text="{Binding StartedUtc, StringFormat='{}{0:yyyy-MM-dd  HH:mm}'}"/>
-                                <Run Text=" — "/>
+                                <Run Text="{Binding ., Converter={StaticResource MeetingDuration}}"/>
+                                <Run Text=" · "/>
                                 <Run Text="{Binding Transcript.Count, Mode=OneWay, StringFormat='{}{0} lines'}"/>
                             </TextBlock>
                         </StackPanel>

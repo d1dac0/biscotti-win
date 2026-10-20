@@ -5,6 +5,7 @@
         Title="{Binding Title}" Height="640" Width="820" Background="#FAF9F6">
     <Window.Resources>
         <local:SecondsToTimeConverter x:Key="SecToTime"/>
+        <local:LocalStartTimeConverter x:Key="LocalStartTime"/>
     </Window.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -21,7 +22,7 @@
                        Foreground="#277D5E" FontSize="12" Margin="0,4,0,0"
                        Visibility="Collapsed"/>
             <TextBlock Foreground="#668">
-                <Run Text="{Binding StartedUtc, StringFormat='{}{0:yyyy-MM-dd  HH:mm}'}"/>
+                <Run Text="{Binding StartedUtc, Converter={StaticResource LocalStartTime}}"/>
             </TextBlock>
         </StackPanel>
 
