@@ -1,6 +1,6 @@
 # Upstream Biscotti Windows clone and port audit
 
-**Checked:** 2026-10-20  
+**Checked:** 2026-10-20
 **Upstream:** [`scosman/Biscotti` at `f5f08c9c7cfb9811efcdb666bf65f9085cadcf6a`](https://github.com/scosman/Biscotti/tree/f5f08c9c7cfb9811efcdb666bf65f9085cadcf6a)
 
 ## Executive finding
@@ -333,4 +333,3 @@ implementing lifecycle behavior.
 - Microsoft: [WASAPI loopback](https://learn.microsoft.com/en-us/windows/win32/coreaudio/loopback-recording), [application loopback sample](https://learn.microsoft.com/en-us/samples/microsoft/windows-classic-samples/applicationloopbackaudio-sample/), [named pipes](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipes), and [Windows path length limits](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation).
 - [ONNX Runtime DirectML](https://onnxruntime.ai/docs/execution-providers/DirectML-ExecutionProvider.html), [NVIDIA CUDA for Windows](https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html), and [CMake on Windows](https://cmake.org/cmake/help/latest/guide/tutorial/Before%20You%20Begin.html).
 - [PolyForm Perimeter 1.0.1](https://polyformproject.org/licenses/perimeter/1.0.1) (license notice from upstream README).
-
