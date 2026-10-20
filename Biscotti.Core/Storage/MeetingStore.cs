@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Biscotti.Core.Audio;
 using Biscotti.Core.Models;
 
 namespace Biscotti.Core.Storage;
@@ -65,9 +66,11 @@ public static class MeetingStore
             if (!File.Exists(json)) continue;
             try
             {
-                result.Add(JsonSerializer.Deserialize<Meeting>(File.ReadAllText(json), JsonOpts)!);
+                var meeting = JsonSerializer.Deserialize<Meeting>(File.ReadAllText(json), JsonOpts)!;
+                MeetingAudioMigration.EnsureEncrypted(dir);
+                result.Add(meeting);
             }
-            catch { /* skip corrupt meeting */ }
+            catch (JsonException) { /* skip corrupt meeting metadata */ }
         }
         return result.OrderByDescending(m => m.StartedUtc).ToList();
     }

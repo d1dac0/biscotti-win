@@ -13,6 +13,7 @@ namespace Biscotti.Win
         private readonly MeetingService _meetings;
         private readonly AppSettings _settings;
         private bool _recording;
+        private bool _audioLoadErrorShown;
         private MeetingWindow? _liveMeetingWindow;
         private readonly System.Windows.Threading.DispatcherTimer _healthTimer;
 
@@ -23,6 +24,8 @@ namespace Biscotti.Win
             WhisperRuntimeConfigurator.Apply(_settings); // before any WhisperFactory is created
             _meetings = new MeetingService(_settings);
             _meetings.StateChanged += (state, msg) => Dispatcher.Invoke(() => StatusText.Text = msg);
+            _meetings.AudioWarning += warning => Dispatcher.Invoke(() =>
+                MessageBox.Show(this, warning, "Audio recovery", MessageBoxButton.OK, MessageBoxImage.Warning));
             _meetings.CurrentMeetingUpdated += m => Dispatcher.Invoke(() =>
             {
                 RefreshList(m);
@@ -150,7 +153,23 @@ namespace Biscotti.Win
 
         private void RefreshList(Meeting? update = null)
         {
-            var meetings = MeetingStore.LoadAll();
+            List<Meeting> meetings;
+            try
+            {
+                meetings = MeetingStore.LoadAll();
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "A meeting audio file could not be opened or migrated.";
+                if (!_audioLoadErrorShown)
+                {
+                    _audioLoadErrorShown = true;
+                    MessageBox.Show(this,
+                        $"A meeting's encrypted audio could not be opened or migrated. No audio was skipped or replaced.\n\n{ex.Message}\n\nAudio keys belong to the original Windows user profile. An administrator password reset can make a DPAPI key unavailable.",
+                        "Meeting audio unavailable", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                return;
+            }
             var selectedId = (MeetingList.SelectedItem as Meeting)?.Id;
             MeetingList.ItemsSource = meetings;
             if (update != null)

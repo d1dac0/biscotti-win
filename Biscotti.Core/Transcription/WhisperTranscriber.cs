@@ -35,13 +35,20 @@ public sealed class WhisperTranscriber : IDisposable
     public async Task<List<TranscriptLine>> TranscribeWavAsync(
         string wavPath, string speakerLabel, CancellationToken ct = default, double offsetSeconds = 0)
     {
-        var results = new List<TranscriptLine>();
         await using var fileReader = new FileStream(wavPath, FileMode.Open, FileAccess.Read);
+        return await TranscribeWavAsync(fileReader, speakerLabel, ct, offsetSeconds);
+    }
+
+    public async Task<List<TranscriptLine>> TranscribeWavAsync(
+        Stream wavStream, string speakerLabel, CancellationToken ct = default, double offsetSeconds = 0)
+    {
+        await using var ownedStream = wavStream;
+        var results = new List<TranscriptLine>();
         await using var processor = GetFactory().CreateBuilder()
             .WithLanguage("auto")
             .WithNoContext()
             .Build();
-        await foreach (var seg in processor.ProcessAsync(fileReader, ct))
+        await foreach (var seg in processor.ProcessAsync(ownedStream, ct))
         {
             results.Add(new TranscriptLine
             {
