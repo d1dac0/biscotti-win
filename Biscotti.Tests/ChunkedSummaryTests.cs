@@ -137,4 +137,41 @@ public class ChunkedSummaryTests
         Assert.Equal(1, calls); // exactly one pass, no chunking for short meetings
         Assert.Contains("## Summary", raw!);
     }
+
+    // ---------- issue #40: probe seam vs. the availability gate ----------
+
+    [Fact]
+    public async Task ProbeBackedSummary_DoesNotConsultAvailability()
+    {
+        // CI has no Ollama: a GenerateProbe replaces the network entirely, so
+        // SummarizeMeetingAsync must not return null just because /api/tags
+        // is unreachable. This is the regression that turned main red.
+        var ollama = new OllamaService();
+        var availabilityCalls = 0;
+        ollama.AvailabilityProbe = _ =>
+        {
+            availabilityCalls++;
+            return Task.FromResult(false);
+        };
+        ollama.GenerateProbe = (_, _) =>
+            Task.FromResult("## Summary\nprobe summary\n## Action Items\nNone\n## Title\nT\n## Participants\nYou");
+
+        var raw = await ollama.SummarizeMeetingAsync(RoundTrip("ACTION-PROMPT-MARKER"));
+
+        Assert.NotNull(raw);
+        Assert.Contains("## Summary", raw!);
+        Assert.Equal(0, availabilityCalls);
+    }
+
+    [Fact]
+    public async Task WithoutProbe_UnavailableServer_StillDegradesToNull()
+    {
+        // Real-app behavior stays: no probe + no Ollama = plain transcript.
+        var ollama = new OllamaService();
+        ollama.AvailabilityProbe = _ => Task.FromResult(false);
+
+        var raw = await ollama.SummarizeMeetingAsync(RoundTrip("hello"));
+
+        Assert.Null(raw);
+    }
 }
