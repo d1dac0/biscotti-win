@@ -5,11 +5,11 @@ using System.Security.Cryptography;
 
 namespace Biscotti.Core.Audio;
 
-/// <summary>Captures the chosen mic and output into separate encrypted audio containers.</summary>
+/// <summary>Captures the chosen mic and either a meeting app or output into encrypted audio containers.</summary>
 public sealed class DualChannelRecorder : IDisposable
 {
     private WaveInEvent? _mic;
-    private WasapiLoopbackCapture? _loopback;
+    private WasapiRecorder? _loopback;
     private MMDevice? _loopDevice;
     private EncryptedAudioWriter? _micWav;
     private EncryptedAudioWriter? _sysWav;
@@ -32,10 +32,12 @@ public sealed class DualChannelRecorder : IDisposable
     public (long mic, long sys) TotalBytes => (Interlocked.Read(ref _micBytes), Interlocked.Read(ref _sysBytes));
     public string? MicError { get; private set; }
     public string DeviceWarning { get { lock (_warningGate) return string.Join("\n", _warnings); } }
+    public string SystemAudioStatus { get; private set; } = "";
     public event Action<byte[], int, int>? LoopbackSamplesAvailable;
 
     public void Start(string micWavPath, string sysWavPath, int? preferredMicDevice = null,
-        string? preferredSpeakerId = null, string? preferredMicName = null)
+        string? preferredSpeakerId = null, string? preferredMicName = null,
+        int? targetProcessId = null, string? targetProcessName = null, int? osBuild = null)
     {
         var selection = new AppSettings { MicDeviceIndex = preferredMicDevice,
             MicDeviceName = preferredMicName, SpeakerDeviceId = preferredSpeakerId };
@@ -46,6 +48,7 @@ public sealed class DualChannelRecorder : IDisposable
         Interlocked.Exchange(ref _sysBytes, 0);
         lock (_warningGate) _warnings.Clear();
         MicError = null;
+        SystemAudioStatus = "";
         _startupFailure = null;
         _microphoneReady.Reset();
         MicWavPath = micWavPath;
@@ -62,7 +65,8 @@ public sealed class DualChannelRecorder : IDisposable
             _stopping = false;
             CaptureStartup.Start(
                 () => StartMic(preferredMicDevice!.Value),
-                () => StartLoopback(preferredSpeakerId),
+                () => StartLoopback(preferredSpeakerId, targetProcessId, targetProcessName,
+                    osBuild ?? Environment.OSVersion.Version.Build),
                 () => _microphoneReady.Wait(TimeSpan.FromSeconds(2)) && _startupFailure is null,
                 ReleaseCapture);
             if (_startupFailure is not null) throw new AudioDeviceException(_startupFailure);
@@ -134,47 +138,78 @@ public sealed class DualChannelRecorder : IDisposable
         }
     }
 
-    private void StartLoopback(string? preferredId)
+    private void StartLoopback(string? preferredId, int? targetProcessId, string? targetProcessName, int osBuild)
     {
-        try
-        {
-            using var enumerator = new MMDeviceEnumerator();
-            _loopDevice = preferredId is null
-                ? enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Console)
-                : enumerator.GetDevice(preferredId);
-            if (_loopDevice.State != DeviceState.Active)
-                throw new AudioDeviceException("The selected output is no longer active.");
-            _loopback = new WasapiLoopbackCapture(_loopDevice);
-            _sysDecimator = new AntiAliasDecimator(_loopback.WaveFormat.SampleRate);
-            _loopback.DataAvailable += LoopbackDataAvailable;
-            _loopback.RecordingStopped += CaptureStopped;
-            _loopback.StartRecording();
-        }
-        catch (Exception ex)
-        {
-            throw new AudioDeviceException("The selected output could not start. Choose an available output in Audio devices. " + ex.Message, ex);
-        }
+        var useProcessLoopback = LoopbackCapturePolicy.ShouldUseProcessLoopback(osBuild, targetProcessId);
+        var processName = string.IsNullOrWhiteSpace(targetProcessName) ? "selected app" : targetProcessName;
+        _loopback = LoopbackCaptureStartup.StartWithFallback(
+            useProcessLoopback,
+            () => CreateProcessLoopbackRecorder(targetProcessId!.Value),
+            ConfigureLoopback,
+            recorder => recorder.StartRecording(),
+            recorder => recorder.Dispose(),
+            () => new WasapiRecorderBuilder().WithDevice(GetLoopDevice(preferredId)).WithLoopbackCapture().Build(),
+            ConfigureLoopback,
+            recorder => recorder.StartRecording(),
+            recorder => recorder.Dispose(),
+            reason => SystemAudioStatus = $"App-only capture could not start ({reason}). Capturing all speaker audio instead; mute notifications and music.");
+
+        if (useProcessLoopback && string.IsNullOrEmpty(SystemAudioStatus))
+            SystemAudioStatus = $"Capturing {processName} and its child processes only.";
+        else if (string.IsNullOrEmpty(SystemAudioStatus) && osBuild < 22000)
+            SystemAudioStatus = "Windows 10 captures all speaker audio. Mute notifications and music during the meeting.";
+        else if (string.IsNullOrEmpty(SystemAudioStatus))
+            SystemAudioStatus = "Capturing all speaker audio. Choose a meeting app for app-only capture.";
     }
 
-    private void LoopbackDataAvailable(object? sender, WaveInEventArgs e)
+    private static WasapiRecorder CreateProcessLoopbackRecorder(int processId)
     {
-        int channels;
-        lock (_audioGate)
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
+            throw new PlatformNotSupportedException("Process loopback requires Windows 10 build 19041 or later.");
+        return new WasapiRecorderBuilder()
+            .WithProcessLoopback((uint)processId, ProcessLoopbackMode.IncludeTargetProcessTree)
+            .WithFormat(WaveFormat.CreateIeeeFloatWaveFormat(48000, 2))
+            .BuildAsync().GetAwaiter().GetResult();
+    }
+
+    private void ConfigureLoopback(WasapiRecorder recorder)
+    {
+        _loopback = recorder;
+        _sysDecimator = new AntiAliasDecimator(recorder.WaveFormat.SampleRate);
+        var channels = recorder.WaveFormat.Channels;
+        recorder.DataAvailable += (buffer, _, _, _) =>
         {
-            if (!_acceptAudio || !ReferenceEquals(sender, _loopback)) return;
-            channels = _loopback!.WaveFormat.Channels;
-            var mono16k = _sysDecimator!.ProcessFloat(e.Buffer, e.BytesRecorded, _loopback!.WaveFormat.Channels);
-            _sysWav!.Append(mono16k);
-            Interlocked.Add(ref _sysBytes, mono16k.Length);
+            var bytes = buffer.ToArray();
+            lock (_audioGate)
+            {
+                if (!_acceptAudio || !ReferenceEquals(recorder, _loopback)) return;
+                var mono16k = _sysDecimator!.ProcessFloat(bytes, bytes.Length, channels);
+                _sysWav!.Append(mono16k);
+                Interlocked.Add(ref _sysBytes, mono16k.Length);
+            }
+            LoopbackSamplesAvailable?.Invoke(bytes, bytes.Length, channels);
+        };
+    }
+
+    private MMDevice GetLoopDevice(string? preferredId)
+    {
+        using var enumerator = new MMDeviceEnumerator();
+        var device = string.IsNullOrEmpty(preferredId)
+            ? enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Console)
+            : enumerator.GetDevice(preferredId);
+        if (device.State != DeviceState.Active)
+        {
+            device.Dispose();
+            throw new AudioDeviceException("The selected output is no longer active. Choose an available output in Audio devices.");
         }
-        LoopbackSamplesAvailable?.Invoke(e.Buffer, e.BytesRecorded, channels);
+        _loopDevice = device;
+        return device;
     }
 
     private void CaptureStopped(object? sender, StoppedEventArgs e)
     {
-        if (_stopping || (!ReferenceEquals(sender, _mic) && !ReferenceEquals(sender, _loopback))) return;
-        var source = ReferenceEquals(sender, _mic) ? "Microphone" : "Output audio";
-        var message = source + " capture stopped unexpectedly. Stop and choose devices before starting a new recording."
+        if (_stopping || !ReferenceEquals(sender, _mic)) return;
+        var message = "Microphone capture stopped unexpectedly. Stop and choose devices before starting a new recording."
             + (e.Exception is null ? "" : " " + e.Exception.Message);
         _startupFailure = message;
         _microphoneReady.Set();
@@ -220,3 +255,49 @@ public sealed class DualChannelRecorder : IDisposable
 }
 
 public record WaveInDeviceInfo(int Index, string Name);
+
+internal static class LoopbackCapturePolicy
+{
+    public static bool ShouldUseProcessLoopback(int osBuild, int? processId) => osBuild >= 22000 && processId is > 0;
+}
+
+internal static class LoopbackCaptureStartup
+{
+    public static T StartWithFallback<T>(bool attemptProcess, Func<T> createProcess, Action<T> configureProcess,
+        Action<T> startProcess, Action<T> disposeProcess, Func<T> createDevice, Action<T> configureDevice,
+        Action<T> startDevice, Action<T> disposeDevice, Action<string> onFallback)
+    {
+        if (attemptProcess)
+        {
+            T? processRecorder = default;
+            try
+            {
+                processRecorder = createProcess();
+                configureProcess(processRecorder);
+                startProcess(processRecorder);
+                return processRecorder;
+            }
+            catch (Exception ex)
+            {
+                if (processRecorder is not null)
+                {
+                    try { disposeProcess(processRecorder); } catch { }
+                }
+                onFallback(ex.Message);
+            }
+        }
+
+        var deviceRecorder = createDevice();
+        try
+        {
+            configureDevice(deviceRecorder);
+            startDevice(deviceRecorder);
+            return deviceRecorder;
+        }
+        catch
+        {
+            disposeDevice(deviceRecorder);
+            throw;
+        }
+    }
+}

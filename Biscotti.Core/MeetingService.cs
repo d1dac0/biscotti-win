@@ -46,12 +46,13 @@ public sealed class MeetingService : IAsyncDisposable
 
     /// <summary>Live per-channel byte counts for the UI's recording-health readout (issue #21).</summary>
     public (long mic, long sys) RecordingStats => _recorder.TotalBytes;
+    public string SystemAudioStatus => _recorder.SystemAudioStatus;
     public string RecordingDeviceWarning => _recorder.DeviceWarning;
     public string AutoStopStatus => _loopbackSilence.IsArmed
         ? "Auto-stop armed: recording stops after 5 minutes without output audio."
         : "Auto-stop inactive until output audio is detected; in-person recording stays manual.";
 
-    public async Task StartRecordingAsync()
+    public async Task StartRecordingAsync(int? targetProcessId = null, string? targetProcessName = null)
     {
         if (State != RecordingState.Idle) throw new InvalidOperationException("A meeting is already in progress.");
         _loopbackSilence.Reset();
@@ -67,7 +68,8 @@ public sealed class MeetingService : IAsyncDisposable
                 pendingMeeting = meeting;
                 meeting.StartedUtc = DateTime.UtcNow;
                 _recorder.Start(Path.Combine(dir, "mic.wav"), Path.Combine(dir, "sys.wav"),
-                    _settings.MicDeviceIndex, _settings.SpeakerDeviceId, _settings.MicDeviceName);
+                    _settings.MicDeviceIndex, _settings.SpeakerDeviceId, _settings.MicDeviceName,
+                    targetProcessId, targetProcessName);
                 _liveTranscription = new LiveTranscriptionWorker(
                     Path.Combine(dir, "mic.wav"), Path.Combine(dir, "sys.wav"),
                     () => _recorder.TotalBytes, _settings.GetResolvedModelPath());
@@ -76,7 +78,7 @@ public sealed class MeetingService : IAsyncDisposable
             _liveTranscription!.LinesReady += AppendLiveLines;
             _liveTranscription.WarningReady += warning => AudioWarning?.Invoke(warning);
             _liveTranscription.Start();
-            SetState(RecordingState.Recording, "Recording… click Stop when the call ends.");
+            SetState(RecordingState.Recording, $"Recording… click Stop when the call ends. {_recorder.SystemAudioStatus}");
             _autoStopTimer = new Timer(CheckForLoopbackSilence, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         }
         catch

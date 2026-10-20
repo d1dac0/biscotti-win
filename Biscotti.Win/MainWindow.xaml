@@ -8,6 +8,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -30,10 +31,16 @@
                     Content="Audio devices" Click="AudioDevicesButton_Click"/>
         </StackPanel>
 
-        <TextBlock x:Name="DeviceWarningText" Grid.Row="2" Foreground="#9B2C20" TextWrapping="Wrap"
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,12">
+            <TextBlock Text="Meeting app audio" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <ComboBox x:Name="AudioAppPicker" Width="480" Height="30" VerticalContentAlignment="Center"/>
+            <Button Content="Refresh" Margin="8,0,0,0" Padding="12,4" Click="RefreshAudioApps_Click"/>
+        </StackPanel>
+
+        <TextBlock x:Name="DeviceWarningText" Grid.Row="3" Foreground="#9B2C20" TextWrapping="Wrap"
                    Margin="0,0,0,12" Visibility="Collapsed" AutomationProperties.LiveSetting="Polite"/>
 
-        <ListBox x:Name="MeetingList" Grid.Row="3" HorizontalContentAlignment="Stretch"
+        <ListBox x:Name="MeetingList" Grid.Row="4" HorizontalContentAlignment="Stretch"
                  Background="Transparent" BorderThickness="0"
                  MouseDoubleClick="MeetingList_DoubleClick"
                  SelectionChanged="MeetingList_SelectionChanged">
