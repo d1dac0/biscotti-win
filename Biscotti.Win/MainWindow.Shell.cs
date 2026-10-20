@@ -154,35 +154,44 @@ public partial class MainWindow
     {
         ShowFromShell();
         var dialog = new SettingsWindow(
-            _settings.RecordingHotkey ?? "Ctrl+Alt+R", SaveHotkeyFromSettings, _hotkeyRegistrationError) { Owner = this };
+            _settings.RecordingHotkey ?? "Ctrl+Alt+R", _settings.LocalVocabulary ?? "",
+            SaveSettingsFromDialog, _hotkeyRegistrationError) { Owner = this };
         dialog.ShowDialog();
     }
 
-    private string? SaveHotkeyFromSettings(string shortcut)
+    private string? SaveSettingsFromDialog(string shortcut, string vocabulary)
     {
-        if (_hotkeyRegistration is null) return "The shortcut service is not ready yet. Try again in a moment.";
-        if (!_hotkeyRegistration.TrySet(shortcut, out var error))
+        var shortcutChanged = !string.Equals(shortcut, _settings.RecordingHotkey ?? "Ctrl+Alt+R", StringComparison.Ordinal);
+        if (shortcutChanged && _hotkeyRegistration is null)
+            return "The shortcut service is not ready yet. Try again in a moment.";
+        if (_hotkeyRegistration is not null && !_hotkeyRegistration.TrySet(shortcut, out var error))
         {
             _hotkeyRegistrationError = error;
             return error;
         }
 
         var previousSetting = _settings.RecordingHotkey;
-        var previousRegistered = _hotkeyRegistration.Current;
+        var previousVocabulary = _settings.LocalVocabulary;
+        var previousRegistered = _hotkeyRegistration?.Current;
         _settings.RecordingHotkey = shortcut;
+        _settings.LocalVocabulary = vocabulary;
         try
         {
             _settings.Save();
             _hotkeyRegistrationError = null;
-            StatusText.Text = $"Global shortcut set to {shortcut}.";
+            StatusText.Text = "Settings saved locally.";
             return null;
         }
         catch (Exception ex)
         {
             _settings.RecordingHotkey = previousSetting;
-            if (previousRegistered is null) _hotkeyRegistration.Clear();
-            else _hotkeyRegistration.TrySet(previousRegistered, out _);
-            _hotkeyRegistrationError = $"Could not save the shortcut. {ex.Message}";
+            _settings.LocalVocabulary = previousVocabulary;
+            if (_hotkeyRegistration is not null)
+            {
+                if (previousRegistered is null) _hotkeyRegistration.Clear();
+                else _hotkeyRegistration.TrySet(previousRegistered, out _);
+            }
+            _hotkeyRegistrationError = $"Could not save settings. {ex.Message}";
             return _hotkeyRegistrationError;
         }
     }

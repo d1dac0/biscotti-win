@@ -30,12 +30,13 @@ internal sealed class LiveTranscriptionWorker : IDisposable
         string micWavPath,
         string systemWavPath,
         Func<(long mic, long sys)> bytesWritten,
-        string modelPath)
+        string modelPath,
+        string? localVocabulary = null)
     {
         _mic = new Channel(micWavPath, "You", allowLegacyPlaintext: false);
         _system = new Channel(systemWavPath, "Speaker", allowLegacyPlaintext: false);
         _bytesWritten = bytesWritten;
-        _transcriber = new WhisperTranscriber(modelPath);
+        _transcriber = new WhisperTranscriber(modelPath, localVocabulary);
         _transcribe = _transcriber.TranscribeWavAsync;
     }
 
