@@ -12,7 +12,7 @@ process loopback on supported Windows 11, device-change warnings, per-meeting
 speaker embeddings, local ICS calendar input, tray/hotkey controls, and
 single-instance activation. The former “CPU is slower than real time” concern
 is contradicted by the measured CPU row: the matrix defines RTF as audio seconds
-per transcription second and reports 1.38×, which is faster than real time.
+per transcription second and reports 1.39×, which is faster than real time.
 
 Four release risks remain prominent:
 
@@ -114,10 +114,11 @@ Follow-up: [#70](https://github.com/d1dac0/biscotti-win/issues/70).
 
 [`transcription-performance-matrix.md`](../transcription-performance-matrix.md)
 defines RTF as seconds of audio divided by transcription wall-clock seconds.
-With the measured CPU RTF of 1.38×, a 60-minute meeting is approximately
-43.5 minutes of transcription, not “a bit over an hour.” The measured RTX 3080
-row is 75.7×. Keep the absent iGPU/RTX 3060 data explicitly pending; do not
-publish estimated values as measurements.
+With the measured CPU RTF of 1.39×, a 60-minute meeting is approximately
+43 minutes 11 seconds of transcription, not “a bit over an hour.” The measured
+RTX 3080 row is 75.7×, or about 48 seconds for an hour of audio. Keep the absent
+iGPU/RTX 3060 data explicitly pending; do not publish estimated values as
+measurements.
 
 Follow-up: [#71](https://github.com/d1dac0/biscotti-win/issues/71).
 
@@ -170,7 +171,7 @@ Follow-up: [#72](https://github.com/d1dac0/biscotti-win/issues/72).
    package, signing path, or update/uninstall test yet.
 
 The old “CPU-only transcription is slower than real time” pre-mortem should be
-retired: measured CPU RTF is 1.38× by the matrix's definition. The matrix's
+retired: measured CPU RTF is 1.39× by the matrix's definition. The matrix's
 60-minute example needs correction, and other GPU tiers remain unmeasured.
 
 ## Hard questions answered
@@ -180,7 +181,7 @@ retired: measured CPU RTF is 1.38× by the matrix's definition. The matrix's
 | Core loop: which loopback? | Selected process tree on supported Windows 11; whole-device mix on Windows 10 or when process startup fails. | Fail closed or request explicit confirmation before widening capture. Run a real two-app test. |
 | Core loop: how much drift? | No bound is recorded. Per-channel sample-rate conversion is exact, but channel clocks are independent. | Measure start/end skew on long dual-channel recordings, set a transcript-level limit, then decide whether to resample. |
 | Core loop: clean-enough audio? | No app-side echo cancellation or denoising. | Define room/noise target and evaluate local processing; do not promise noise isolation today. |
-| Local AI: speed by hardware? | CPU 1.38×, RTX 3080 75.7× on one 289.8-second large-v3-turbo fixture. | Correct CPU duration arithmetic and measure iGPU/RTX 3060 on those systems. |
+| Local AI: speed by hardware? | CPU 1.39×, RTX 3080 75.7× on one 289.8-second large-v3-turbo fixture. | Correct CPU duration arithmetic and measure iGPU/RTX 3060 on those systems. |
 | Local AI: GPU choices? | CPU is baseline; CUDA is opt-in. There is no DirectML backend. | Compare runtime support, model parity, packaging size, and fallback across actual devices before adding a second GPU backend. |
 | Local AI: speaker quality? | Per-meeting embedding clusters work on the small sample set; no cross-meeting voiceprints or overlap separation. | Build a labeled noisy/crosstalk evaluation set and set an accuracy bar. |
 | Storage: abrupt termination? | Atomic JSON writes and authenticated audio frames preserve prior metadata and complete audio frames. | Add/record a process-kill recovery smoke test against a live WPF recording. |
