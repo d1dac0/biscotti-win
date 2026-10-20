@@ -62,6 +62,72 @@ public sealed class EncryptedAudioFileTests
     }
 
     [Fact]
+    public void PlaybackStream_DecryptsAuthenticatedPcmOnReadWithoutCreatingPlaintextFile()
+    {
+        var dir = NewDirectory();
+        var path = Path.Combine(dir, "mic.wav");
+        var pcm = Enumerable.Range(0, 7000).Select(i => (byte)(i % 211)).ToArray();
+        using (var writer = new EncryptedAudioWriter(path, RandomNumberGenerator.GetBytes(32), 29, new TestKeyProtector()))
+            writer.Append(pcm);
+
+        using (var wav = EncryptedAudioPlayback.OpenWavStream(path, new TestKeyProtector()))
+        {
+            var bytes = new byte[wav.Length];
+            wav.ReadExactly(bytes);
+            Assert.Equal("RIFF", System.Text.Encoding.ASCII.GetString(bytes, 0, 4));
+            Assert.Equal(pcm, bytes[44..]);
+        }
+        Assert.Equal(new[] { "mic.wav" }, Directory.GetFiles(dir).Select(Path.GetFileName));
+        Assert.False(ContainsSequence(File.ReadAllBytes(path), pcm));
+        Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
+    public void PlaybackStream_SurfacesDpapiKeyFailureAsReadableError()
+    {
+        var dir = NewDirectory();
+        var path = Path.Combine(dir, "sys.wav");
+        using (var writer = new EncryptedAudioWriter(path, RandomNumberGenerator.GetBytes(32), 31, new TestKeyProtector()))
+            writer.Append(new byte[128]);
+
+        var error = Assert.Throws<CryptographicException>(() => EncryptedAudioPlayback.OpenWavStream(path, new FailingProtector()));
+        Assert.Contains("Could not unlock", error.Message);
+        Assert.Contains("sys channel", error.Message);
+        Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
+    public void PlaybackStream_ReportsMissingChannelWithoutThrowingAnUnhelpfulPathError()
+    {
+        var dir = NewDirectory();
+        var path = Path.Combine(dir, "sys.wav");
+
+        var error = Assert.Throws<FileNotFoundException>(() => EncryptedAudioPlayback.OpenWavStream(path, new TestKeyProtector()));
+        Assert.Contains("No saved audio was found", error.Message);
+        Assert.Contains("sys channel", error.Message);
+        Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
+    public void PlaybackStream_RejectsTamperedAudioWhenTheFrameIsRead()
+    {
+        var dir = NewDirectory();
+        var path = Path.Combine(dir, "mic.wav");
+        using (var writer = new EncryptedAudioWriter(path, RandomNumberGenerator.GetBytes(32), 37, new TestKeyProtector()))
+            writer.Append(new byte[1000]);
+        var bytes = File.ReadAllBytes(path);
+        bytes[^1] ^= 0x20;
+        File.WriteAllBytes(path, bytes);
+
+        using (var wav = EncryptedAudioPlayback.OpenWavStream(path, new TestKeyProtector()))
+        {
+            wav.Position = 44;
+            Assert.Throws<AuthenticationTagMismatchException>(() => wav.Read(new byte[1000], 0, 1000));
+        }
+        Directory.Delete(dir, recursive: true);
+    }
+
+    [Fact]
     public void Reader_KeepsPriorFramesAndReportsIncompleteTail()
     {
         var dir = NewDirectory();

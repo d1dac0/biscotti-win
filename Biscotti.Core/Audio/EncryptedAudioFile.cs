@@ -21,6 +21,31 @@ internal interface IMeetingKeyProtector
     byte[] Unprotect(byte[] protectedKey);
 }
 
+/// <summary>Opens saved meeting audio as an authenticated, decrypt-on-read WAV stream.</summary>
+public static class EncryptedAudioPlayback
+{
+    public static Stream OpenWavStream(string path) => OpenWavStream(path, protector: null);
+
+    internal static Stream OpenWavStream(string path, IMeetingKeyProtector? protector)
+    {
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"No saved audio was found for {MeetingAudioMigration.AudioIdentity(path)}.", path);
+        if (!EncryptedAudioFile.IsEncrypted(path))
+            throw new InvalidDataException($"{MeetingAudioMigration.AudioIdentity(path)} does not have an encrypted audio header.");
+
+        EncryptedAudioReader reader;
+        try { reader = new EncryptedAudioReader(path, protector); }
+        catch (CryptographicException ex) { throw MeetingAudioMigration.KeyAccessFailure(path, ex); }
+
+        try { return reader.OpenWavStream(); }
+        catch
+        {
+            reader.Dispose();
+            throw;
+        }
+    }
+}
+
 internal sealed class DpapiMeetingKeyProtector : IMeetingKeyProtector
 {
     public byte[] Protect(byte[] key)

@@ -60,6 +60,27 @@
                          BorderThickness="0" FontSize="14"
                          VerticalScrollBarVisibility="Auto"/>
             </TabItem>
+            <TabItem x:Name="AudioTab" Header="Audio">
+                <StackPanel Margin="16">
+                    <TextBlock Text="Review either saved audio channel. One channel plays at a time. Playback decrypts authenticated audio as it is read and keeps it in memory."
+                               TextWrapping="Wrap" Margin="0,0,0,16"/>
+                    <GroupBox Header="Microphone" Padding="12" Margin="0,0,0,12">
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="MicPlayButton" Content="Play microphone" Padding="14,6" Click="MicPlay_Click"/>
+                            <Button x:Name="MicStopButton" Content="Stop" Padding="14,6" Margin="8,0,0,0"
+                                    IsEnabled="False" Click="MicStop_Click"/>
+                        </StackPanel>
+                    </GroupBox>
+                    <GroupBox Header="System audio" Padding="12">
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="SysPlayButton" Content="Play system audio" Padding="14,6" Click="SysPlay_Click"/>
+                            <Button x:Name="SysStopButton" Content="Stop" Padding="14,6" Margin="8,0,0,0"
+                                    IsEnabled="False" Click="SysStop_Click"/>
+                        </StackPanel>
+                    </GroupBox>
+                    <TextBlock x:Name="AudioStatus" Text="" TextWrapping="Wrap" Margin="0,16,0,0"/>
+                </StackPanel>
+            </TabItem>
         </TabControl>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
