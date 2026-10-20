@@ -37,7 +37,8 @@ public sealed class DualChannelRecorder : IDisposable
 
     public void Start(string micWavPath, string sysWavPath, int? preferredMicDevice = null,
         string? preferredSpeakerId = null, string? preferredMicName = null,
-        int? targetProcessId = null, string? targetProcessName = null, int? osBuild = null)
+        int? targetProcessId = null, string? targetProcessName = null, int? osBuild = null,
+        bool allowSystemWideLoopback = false)
     {
         var selection = new AppSettings { MicDeviceIndex = preferredMicDevice,
             MicDeviceName = preferredMicName, SpeakerDeviceId = preferredSpeakerId };
@@ -66,7 +67,7 @@ public sealed class DualChannelRecorder : IDisposable
             CaptureStartup.Start(
                 () => StartMic(preferredMicDevice!.Value),
                 () => StartLoopback(preferredSpeakerId, targetProcessId, targetProcessName,
-                    osBuild ?? Environment.OSVersion.Version.Build),
+                    osBuild ?? Environment.OSVersion.Version.Build, allowSystemWideLoopback),
                 () => _microphoneReady.Wait(TimeSpan.FromSeconds(2)) && _startupFailure is null,
                 ReleaseCapture);
             if (_startupFailure is not null) throw new AudioDeviceException(_startupFailure);
@@ -138,12 +139,21 @@ public sealed class DualChannelRecorder : IDisposable
         }
     }
 
-    private void StartLoopback(string? preferredId, int? targetProcessId, string? targetProcessName, int osBuild)
+    private void StartLoopback(string? preferredId, int? targetProcessId, string? targetProcessName,
+        int osBuild, bool allowSystemWideLoopback)
     {
-        var useProcessLoopback = LoopbackCapturePolicy.ShouldUseProcessLoopback(osBuild, targetProcessId);
+        // No process ID means the caller selected all speaker audio explicitly.
+        allowSystemWideLoopback |= targetProcessId is null;
+        var useProcessLoopback = LoopbackCapturePolicy.ShouldUseProcessLoopback(
+            osBuild, targetProcessId, forceSystemWide: allowSystemWideLoopback);
         var processName = string.IsNullOrWhiteSpace(targetProcessName) ? "selected app" : targetProcessName;
+        if (targetProcessId is > 0 && !useProcessLoopback && !allowSystemWideLoopback)
+            throw new SystemWideCaptureConsentException(
+                "This Windows version cannot capture only the selected app. Choose whether to record all speaker audio, including audio from other apps.");
+
         _loopback = LoopbackCaptureStartup.StartWithFallback(
             useProcessLoopback,
+            allowSystemWideLoopback,
             () => CreateProcessLoopbackRecorder(targetProcessId!.Value),
             ConfigureLoopback,
             recorder => recorder.StartRecording(),
@@ -152,7 +162,7 @@ public sealed class DualChannelRecorder : IDisposable
             ConfigureLoopback,
             recorder => recorder.StartRecording(),
             recorder => recorder.Dispose(),
-            reason => SystemAudioStatus = $"App-only capture could not start ({reason}). Capturing all speaker audio instead; mute notifications and music.");
+            reason => SystemAudioStatus = $"App-only capture could not start ({reason}). Capturing all speaker audio; mute notifications and music.");
 
         if (useProcessLoopback && string.IsNullOrEmpty(SystemAudioStatus))
             SystemAudioStatus = $"Capturing {processName} and its child processes only.";
@@ -258,12 +268,14 @@ public record WaveInDeviceInfo(int Index, string Name);
 
 internal static class LoopbackCapturePolicy
 {
-    public static bool ShouldUseProcessLoopback(int osBuild, int? processId) => osBuild >= 22000 && processId is > 0;
+    public static bool ShouldUseProcessLoopback(int osBuild, int? processId, bool forceSystemWide = false) =>
+        !forceSystemWide && osBuild >= 22000 && processId is > 0;
 }
 
 internal static class LoopbackCaptureStartup
 {
-    public static T StartWithFallback<T>(bool attemptProcess, Func<T> createProcess, Action<T> configureProcess,
+    public static T StartWithFallback<T>(bool attemptProcess, bool allowDeviceFallback,
+        Func<T> createProcess, Action<T> configureProcess,
         Action<T> startProcess, Action<T> disposeProcess, Func<T> createDevice, Action<T> configureDevice,
         Action<T> startDevice, Action<T> disposeDevice, Action<string> onFallback)
     {
@@ -283,8 +295,16 @@ internal static class LoopbackCaptureStartup
                 {
                     try { disposeProcess(processRecorder); } catch { }
                 }
+                if (!allowDeviceFallback)
+                    throw new SystemWideCaptureConsentException(
+                        $"App-only capture could not start ({ex.Message}). Choose whether to retry using all speaker audio, including audio from other apps.", ex);
                 onFallback(ex.Message);
             }
+        }
+        else if (!allowDeviceFallback)
+        {
+            throw new SystemWideCaptureConsentException(
+                "Choose whether to record all speaker audio, including audio from other apps.");
         }
 
         var deviceRecorder = createDevice();
@@ -301,3 +321,6 @@ internal static class LoopbackCaptureStartup
         }
     }
 }
+
+public sealed class SystemWideCaptureConsentException(string message, Exception? inner = null)
+    : Exception(message, inner);
