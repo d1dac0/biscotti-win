@@ -72,7 +72,7 @@ public sealed class MeetingService : IAsyncDisposable
                     targetProcessId, targetProcessName);
                 _liveTranscription = new LiveTranscriptionWorker(
                     Path.Combine(dir, "mic.wav"), Path.Combine(dir, "sys.wav"),
-                    () => _recorder.TotalBytes, _settings.GetResolvedModelPath());
+                    () => _recorder.TotalBytes, _settings.GetResolvedModelPath(), _settings.LocalVocabulary);
             });
             _current = pendingMeeting;
             _liveTranscription!.LinesReady += AppendLiveLines;
@@ -194,7 +194,7 @@ public sealed class MeetingService : IAsyncDisposable
         else
         {
             // Defensive fallback if live transcription could not be started.
-            using var transcriber = new WhisperTranscriber(_settings.GetResolvedModelPath());
+            using var transcriber = new WhisperTranscriber(_settings.GetResolvedModelPath(), _settings.LocalVocabulary);
             var micLines = await TranscribeSavedAudioAsync(transcriber, micPath, "You", ct);
             var sysLines = File.Exists(sysPath) && new FileInfo(sysPath).Length > 1000
                 ? await TranscribeSavedAudioAsync(transcriber, sysPath, "Speaker", ct)

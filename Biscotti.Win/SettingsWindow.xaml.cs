@@ -5,16 +5,18 @@ namespace Biscotti.Win;
 
 public partial class SettingsWindow : Window
 {
-    private readonly Func<string, string?> _saveShortcut;
+    private readonly Func<string, string, string?> _saveSettings;
     private string _candidate;
     private bool _capturing;
 
-    public SettingsWindow(string currentShortcut, Func<string, string?> saveShortcut, string? startupError = null)
+    public SettingsWindow(string currentShortcut, string currentVocabulary,
+        Func<string, string, string?> saveSettings, string? startupError = null)
     {
         InitializeComponent();
         _candidate = currentShortcut;
-        _saveShortcut = saveShortcut;
+        _saveSettings = saveSettings;
         ShortcutBox.Text = currentShortcut;
+        VocabularyBox.Text = currentVocabulary;
         if (!string.IsNullOrWhiteSpace(startupError))
         {
             MessageText.Text = startupError;
@@ -58,7 +60,7 @@ public partial class SettingsWindow : Window
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        var error = _saveShortcut(_candidate);
+        var error = _saveSettings(_candidate, VocabularyBox.Text);
         if (error is not null)
         {
             MessageText.Text = error;
