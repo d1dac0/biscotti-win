@@ -27,6 +27,8 @@ long transcripts, at-rest privacy, hardware changes mid-meeting.
 - [x] #16 Map-reduce chunked summaries so long meetings are not truncated (PR #37)
 - [ ] #15 Live incremental transcription while the meeting is running (design: [live transcription](docs/specs/live-incremental-transcription.md))
 - [ ] #14 Per-app loopback capture (only the meeting app lands in the transcript)
+- [ ] #48 Play encrypted microphone and system audio in the meeting window
+  - Plan: expose the existing authenticated decrypting stream to playback; add independent microphone/system play-stop controls; surface missing, corrupt, or unavailable-key errors; cover stream and failure handling without audio hardware.
 - [x] #19 Device picker UI and mid-meeting device-change handling (PR #49; decision: [audio device selection](docs/specs/audio-device-selection.md))
 
 ## Phase 3: Capture the meeting context around the transcript
