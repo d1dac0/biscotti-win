@@ -95,4 +95,3 @@ Playback remains separately tracked by #48 and is deferred at the user's request
 - Physical unplug and Windows default-output change checks were not performed;
   hardware-free snapshot tests cover these transitions and warning behavior.
 - Original device preferences were restored after the live check.
-
