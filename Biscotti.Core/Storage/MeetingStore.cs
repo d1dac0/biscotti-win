@@ -59,7 +59,19 @@ public static class MeetingStore
 
     public static List<Meeting> LoadAll()
     {
-        var result = new List<Meeting>();
+        var records = ReadMeetingMetadata();
+        foreach (var record in records)
+            MeetingAudioMigration.EnsureEncrypted(record.Directory);
+        return records.Select(record => record.Meeting).ToList();
+    }
+
+    /// <summary>Reads meeting.json files without opening or migrating audio.</summary>
+    public static List<Meeting> LoadMetadataOnly() =>
+        ReadMeetingMetadata().Select(record => record.Meeting).ToList();
+
+    private static List<(string Directory, Meeting Meeting)> ReadMeetingMetadata()
+    {
+        var result = new List<(string Directory, Meeting Meeting)>();
         if (!Directory.Exists(Root)) return result;
         foreach (var dir in Directory.EnumerateDirectories(Root))
         {
@@ -68,12 +80,11 @@ public static class MeetingStore
             try
             {
                 var meeting = JsonSerializer.Deserialize<Meeting>(File.ReadAllText(json), JsonOpts)!;
-                MeetingAudioMigration.EnsureEncrypted(dir);
-                result.Add(meeting);
+                result.Add((dir, meeting));
             }
             catch (JsonException) { /* skip corrupt meeting metadata */ }
         }
-        return result.OrderByDescending(m => m.StartedUtc).ToList();
+        return result.OrderByDescending(record => record.Meeting.StartedUtc).ToList();
     }
 
     public static Task<List<Meeting>> LoadAllAsync() => Task.Run(LoadAll);

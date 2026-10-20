@@ -5,6 +5,7 @@ using System.Linq;
 using Biscotti.Core.Audio;
 using Biscotti.Core.Models;
 using Biscotti.Core.Storage;
+using Biscotti.Mcp;
 using Xunit;
 
 namespace Biscotti.Tests;
@@ -226,6 +227,62 @@ public class CrashSafetyTests
         var response = markdown.IndexOf("**Speaker**: response", StringComparison.Ordinal);
 
         Assert.True(start >= 0 && start < note && note < response);
+    }
+
+    [Fact]
+    public void MeetingStore_LoadMetadataOnly_DoesNotMigrateLegacyAudio()
+    {
+        MeetingStore.RootOverride = Path.Combine(Path.GetTempPath(), $"biscotti-mcp-metadata-{Guid.NewGuid()}");
+        try
+        {
+            var meeting = new Meeting { StartedUtc = DateTime.UtcNow, Title = "Metadata only" };
+            MeetingStore.Save(meeting);
+            var audioPath = Path.Combine(MeetingStore.MeetingDir(meeting.Id), "mic.wav");
+            File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "test-meeting-16k.wav"), audioPath);
+
+            var loaded = MeetingStore.LoadMetadataOnly();
+
+            Assert.Equal(meeting.Id, Assert.Single(loaded).Id);
+            Assert.False(EncryptedAudioFile.IsEncrypted(audioPath));
+            Assert.False(File.Exists(audioPath + ".enc-migrate"));
+        }
+        finally
+        {
+            var dir = MeetingStore.RootOverride!;
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            MeetingStore.RootOverride = null;
+        }
+    }
+
+    [Fact]
+    public void MeetingQueryService_SearchesMeetingsAndPagesTranscript()
+    {
+        var id = Guid.NewGuid();
+        var meeting = new Meeting
+        {
+            Id = id,
+            StartedUtc = DateTime.UtcNow,
+            Title = "Quarterly launch",
+            Summary = "Review the release checklist.",
+        };
+        meeting.Transcript.Add(new TranscriptLine { Speaker = "You", Text = "Budget is approved", StartSeconds = 2, EndSeconds = 3 });
+        meeting.Transcript.Add(new TranscriptLine { Speaker = "Speaker 1", Text = "We can ship Friday", StartSeconds = 8, EndSeconds = 9 });
+        var queries = new MeetingQueryService(() => new List<Meeting> { meeting });
+
+        var search = queries.SearchMeetings("budget");
+        var details = queries.GetMeeting(id.ToString());
+        var firstPage = queries.GetTranscript(id.ToString(), offset: 0, limit: 1);
+        var secondPage = queries.GetTranscript(id.ToString(), offset: 1, limit: 1);
+
+        Assert.Equal(1, search.TotalMatches);
+        Assert.Equal(id, Assert.Single(search.Meetings).Id);
+        Assert.True(details.Found);
+        Assert.Equal("Quarterly launch", details.Meeting!.Title);
+        Assert.True(firstPage.HasMore);
+        Assert.Equal("You", Assert.Single(firstPage.Lines!).Speaker);
+        Assert.False(secondPage.HasMore);
+        Assert.Equal("Speaker 1", Assert.Single(secondPage.Lines!).Speaker);
+        Assert.Equal(8, secondPage.Lines![0].StartSeconds);
     }
 
     [Fact]

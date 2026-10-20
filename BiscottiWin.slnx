@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="Biscotti.Core/Biscotti.Core.csproj" />
+  <Project Path="Biscotti.Mcp/Biscotti.Mcp.csproj" />
   <Project Path="Biscotti.Tests/Biscotti.Tests.csproj" />
   <Project Path="Biscotti.Win/Biscotti.Win.csproj" />
 </Solution>
