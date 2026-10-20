@@ -42,6 +42,21 @@ public sealed class SpeakerDiarizationTests
     }
 
     [Fact]
+    public void AssignClusters_AvoidsFalseMergeAndFalseSplitForStableSpeakerVectors()
+    {
+        float[] firstSpeakerTurn = [1f, 0f, 0f];
+        float[] differentSpeakerTurn = [0.5f, 0.8660254f, 0f];
+        float[] returningSpeakerTurn = [0.96f, 0.28f, 0f];
+
+        var clusters = SpeakerEmbeddingClusterer.AssignClusters(
+            [firstSpeakerTurn, differentSpeakerTurn, returningSpeakerTurn]);
+
+        Assert.Equal(0, clusters[0]);
+        Assert.Equal(1, clusters[1]);
+        Assert.Equal(0, clusters[2]);
+    }
+
+    [Fact]
     public void ApplyLabels_UsesFirstAppearanceAndPreservesFallbackLabels()
     {
         var lines = new List<TranscriptLine>

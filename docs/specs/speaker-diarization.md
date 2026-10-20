@@ -44,10 +44,17 @@ while keeping inference on-device. The repo stores encrypted 16 kHz mono PCM
 loopback audio, so processing can reuse the existing authenticated audio reader
 and WAV format.
 
-The similarity threshold was checked against ten short public Sherpa-ONNX
-speaker samples. At 0.88, the 45 pair comparisons separated the two speakers
-in that sample set without errors; this is a small sanity check, not a broad
-accuracy claim.
+The 0.88 similarity threshold was first checked against ten short public
+Sherpa-ONNX speaker samples. A later labeled evaluation used 277 annotated
+turns from one public AMI meeting. On the 170 turns long enough to embed, the
+threshold produced pairwise precision 0.924, recall 0.048, and F1 0.092. The
+F1-optimal tested threshold was 0.71 (precision 0.683, recall 0.265); its 618
+false-merge pairs were substantially more than the 20 at 0.88. Keep 0.88 as a
+conservative default until broader evidence supports accepting that merge risk.
+This result exposes substantial false splitting, so cluster labels remain
+best effort and overlap is not separated. See
+[speaker-clustering evaluation](../speaker-clustering-evaluation.md) for the
+method, noise experiments, and scope limits.
 
 The selected model is not redistributed in the app; it is downloaded after
 recording when needed. Its source training model is licensed CC-BY-4.0, which

@@ -59,11 +59,15 @@ See [the MCP setup guide](docs/mcp-server.md) for build and client configuration
 ## Remote speaker labels
 
 After recording, Biscotti locally groups remote transcript segments using
-speaker embeddings. It can replace a cluster label with a real name when the
-person introduces themselves or the transcript clearly matches an attendee.
+speaker embeddings. Labels are best effort: short or unusable segments keep
+their fallback labels, and overlapping speech is not separated. A speaker may
+also receive more than one cluster label. Biscotti can replace a cluster label
+with a real name only when that speaker introduces themselves in the transcript.
 The first processed meeting downloads the 26.5 MB English speaker model into
 the local model cache; no meeting audio is uploaded. See
 [third-party notices](docs/THIRD-PARTY-NOTICES.md) for model attribution.
+The measured scope and limitations are in the
+[speaker-clustering evaluation](docs/speaker-clustering-evaluation.md).
 
 ## Roadmap (from Biscotti feature parity)
 
