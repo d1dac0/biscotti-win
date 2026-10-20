@@ -36,6 +36,7 @@ namespace Biscotti.Win
                 {
                     _recording = false;
                     _healthTimer?.Stop();
+                    _liveMeetingWindow?.StopAddingTimestampedNotes();
                     RecordButton.Content = "●  Start recording";
                     RecordButton.Background = new SolidColorBrush(Color.FromRgb(0xC0, 0x39, 0x2B));
                     RecordButton.IsEnabled = false;
@@ -370,7 +371,9 @@ namespace Biscotti.Win
                 RecordingDurationText.Visibility = Visibility.Visible;
                 if (_meetings.Current is { } meeting)
                 {
-                    _liveMeetingWindow = new MeetingWindow(meeting, isLiveRecording: true) { Owner = this };
+                    _liveMeetingWindow = new MeetingWindow(meeting, isLiveRecording: true,
+                        addTimestampedNote: _meetings.AddTimestampedNote,
+                        recordingElapsedSeconds: () => _recordingStopwatch?.Elapsed.TotalSeconds ?? 0) { Owner = this };
                     _liveMeetingWindow.Closed += (_, _) => _liveMeetingWindow = null;
                     _liveMeetingWindow.Show();
                 }
@@ -403,6 +406,7 @@ namespace Biscotti.Win
             _healthTimer.Stop();
             _recordingStopwatch?.Stop();
             _recordingStopwatch = null;
+            _liveMeetingWindow?.StopAddingTimestampedNotes();
             RecordingDurationText.Visibility = Visibility.Collapsed;
             RecordButton.Content = "●  Start recording";
             RecordButton.Background = new SolidColorBrush(Color.FromRgb(0xC0, 0x39, 0x2B));

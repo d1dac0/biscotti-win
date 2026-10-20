@@ -16,19 +16,29 @@ namespace Biscotti.Win
         private WaveFileReader? _audioReader;
         private EventHandler<StoppedEventArgs>? _playbackStoppedHandler;
         private string? _playingChannel;
+        private readonly Action<string, double>? _addTimestampedNote;
+        private readonly Func<double>? _recordingElapsedSeconds;
 
-        public MeetingWindow(Meeting meeting, bool isLiveRecording = false)
+        public MeetingWindow(Meeting meeting, bool isLiveRecording = false,
+            Action<string, double>? addTimestampedNote = null, Func<double>? recordingElapsedSeconds = null)
         {
             InitializeComponent();
             _meeting = meeting;
+            _addTimestampedNote = addTimestampedNote;
+            _recordingElapsedSeconds = recordingElapsedSeconds;
             DataContext = meeting;
             LiveStatus.Visibility = isLiveRecording ? Visibility.Visible : Visibility.Collapsed;
+            LiveNoteEditor.Visibility = isLiveRecording && addTimestampedNote is not null && recordingElapsedSeconds is not null
+                ? Visibility.Visible : Visibility.Collapsed;
             DeleteButton.IsEnabled = !isLiveRecording;
             SaveButton.IsEnabled = !isLiveRecording;
             TitleBox.IsReadOnly = isLiveRecording;
             SummaryBox.IsReadOnly = isLiveRecording;
             NotesBox.IsReadOnly = isLiveRecording;
+            NotesBox.Visibility = isLiveRecording ? Visibility.Collapsed : Visibility.Visible;
+            NotesGrid.RowDefinitions[2].Height = isLiveRecording ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
             AudioTab.IsEnabled = !isLiveRecording;
+            RefreshTimestampedNotes();
             Closed += (_, _) => StopPlayback();
         }
 
@@ -37,6 +47,39 @@ namespace Biscotti.Win
             TranscriptList.ItemsSource = null;
             TranscriptList.ItemsSource = _meeting.Transcript;
             TranscriptScroller.ScrollToEnd();
+            RefreshTimestampedNotes();
+        }
+
+        private void RefreshTimestampedNotes()
+        {
+            var notes = _meeting.TimestampedNotes.OrderBy(note => note.StartSeconds).ToList();
+            TimestampedNotesList.ItemsSource = notes;
+            TimestampedNotesScroller.Visibility = notes.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+            NotesGrid.RowDefinitions[1].Height = notes.Count == 0 ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        }
+
+        private void AddLiveNote_Click(object sender, RoutedEventArgs e)
+        {
+            var text = LiveNoteInput.Text.Trim();
+            if (text.Length == 0) return;
+
+            try
+            {
+                _addTimestampedNote?.Invoke(text, _recordingElapsedSeconds?.Invoke() ?? 0);
+                LiveNoteInput.Clear();
+                LiveNoteStatus.Text = "Note saved with the current recording time.";
+            }
+            catch (Exception ex)
+            {
+                LiveNoteStatus.Text = $"Could not save note. {ex.Message}";
+            }
+        }
+
+        public void StopAddingTimestampedNotes()
+        {
+            LiveNoteInput.IsEnabled = false;
+            AddLiveNoteButton.IsEnabled = false;
+            LiveNoteStatus.Text = "Recording stopped; notes are read-only while the meeting finishes.";
         }
 
         public void SetRecordingComplete()
@@ -47,6 +90,9 @@ namespace Biscotti.Win
             TitleBox.IsReadOnly = false;
             SummaryBox.IsReadOnly = false;
             NotesBox.IsReadOnly = false;
+            LiveNoteEditor.Visibility = Visibility.Collapsed;
+            NotesBox.Visibility = Visibility.Visible;
+            NotesGrid.RowDefinitions[2].Height = new GridLength(1, GridUnitType.Star);
             AudioTab.IsEnabled = true;
         }
 
