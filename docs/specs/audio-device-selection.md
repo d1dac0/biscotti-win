@@ -94,7 +94,5 @@ Playback remains separately tracked by #48 and is deferred at the user's request
   arrived and silent system output did not prevent recording.
 - Physical unplug and Windows default-output change checks were not performed;
   hardware-free snapshot tests cover these transitions and warning behavior.
-- Original device preferences were restored after the live check. One locally
-  generated smoke-test meeting was retained because automated cleanup was
-  rejected by the execution policy.
+- Original device preferences were restored after the live check.
 
