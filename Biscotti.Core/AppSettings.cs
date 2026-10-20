@@ -5,6 +5,7 @@ namespace Biscotti.Core;
 public sealed class AppSettings
 {
     public int? MicDeviceIndex { get; set; }
+    public string? MicDeviceName { get; set; }
     public string? SpeakerDeviceId { get; set; }
     public string? WhisperModelId { get; set; } = ModelStore.LargeV3Turbo.Id;
     public string? OllamaModel { get; set; } = "gemma3:4b";

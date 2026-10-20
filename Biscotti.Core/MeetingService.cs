@@ -19,9 +19,7 @@ public sealed class MeetingService : IAsyncDisposable
     private readonly DualChannelRecorder _recorder = new();
     private readonly AppSettings _settings;
     private Meeting? _current;
-    private string? _currentDir;
     private LiveTranscriptionWorker? _liveTranscription;
-    private (long mic, long sys) _recordingByteBaseline;
 
     public RecordingState State { get; private set; } = RecordingState.Idle;
     public event Action<RecordingState, string>? StateChanged;
@@ -40,33 +38,50 @@ public sealed class MeetingService : IAsyncDisposable
 
     /// <summary>Live per-channel byte counts for the UI's recording-health readout (issue #21).</summary>
     public (long mic, long sys) RecordingStats => _recorder.TotalBytes;
+    public string RecordingDeviceWarning => _recorder.DeviceWarning;
 
-    public void StartRecording()
+    public async Task StartRecordingAsync()
     {
-        if (State == RecordingState.Recording) throw new InvalidOperationException("Already recording.");
-        var (meeting, dir) = MeetingStore.CreateNew();
-        meeting.StartedUtc = DateTime.UtcNow;
-        _current = meeting;
-        _currentDir = dir;
-        _recordingByteBaseline = _recorder.TotalBytes;
-        _recorder.Start(
-            Path.Combine(dir, "mic.wav"),
-            Path.Combine(dir, "sys.wav"),
-            _settings.MicDeviceIndex,
-            _settings.SpeakerDeviceId);
-        _liveTranscription = new LiveTranscriptionWorker(
-            Path.Combine(dir, "mic.wav"),
-            Path.Combine(dir, "sys.wav"),
-            () =>
+        if (State != RecordingState.Idle) throw new InvalidOperationException("A meeting is already in progress.");
+        SetState(RecordingState.Starting, "Checking audio devices…");
+        var previousMeeting = _current;
+        Meeting? pendingMeeting = null;
+        try
+        {
+            await Task.Run(() =>
             {
-                var total = _recorder.TotalBytes;
-                return (total.mic - _recordingByteBaseline.mic, total.sys - _recordingByteBaseline.sys);
-            },
-            _settings.GetResolvedModelPath());
-        _liveTranscription.LinesReady += AppendLiveLines;
-        _liveTranscription.WarningReady += warning => AudioWarning?.Invoke(warning);
-        _liveTranscription.Start();
-        SetState(RecordingState.Recording, "Recording… click Stop when the call ends.");
+                AudioDevices.Validate(_settings, AudioDevices.Enumerate());
+                var (meeting, dir) = MeetingStore.CreateNew();
+                pendingMeeting = meeting;
+                meeting.StartedUtc = DateTime.UtcNow;
+                _recorder.Start(Path.Combine(dir, "mic.wav"), Path.Combine(dir, "sys.wav"),
+                    _settings.MicDeviceIndex, _settings.SpeakerDeviceId, _settings.MicDeviceName);
+                _liveTranscription = new LiveTranscriptionWorker(
+                    Path.Combine(dir, "mic.wav"), Path.Combine(dir, "sys.wav"),
+                    () => _recorder.TotalBytes, _settings.GetResolvedModelPath());
+            });
+            _current = pendingMeeting;
+            _liveTranscription!.LinesReady += AppendLiveLines;
+            _liveTranscription.WarningReady += warning => AudioWarning?.Invoke(warning);
+            _liveTranscription.Start();
+            SetState(RecordingState.Recording, "Recording… click Stop when the call ends.");
+        }
+        catch
+        {
+            try
+            {
+                _recorder.Stop();
+                _liveTranscription?.Dispose();
+                _liveTranscription = null;
+                if (pendingMeeting is not null) MeetingStore.Delete(pendingMeeting.Id);
+            }
+            finally
+            {
+                _current = previousMeeting;
+                SetState(RecordingState.Idle, "Recording did not start. Check Audio devices and try again.");
+            }
+            throw;
+        }
     }
 
     private void AppendLiveLines(IReadOnlyList<TranscriptLine> lines)
@@ -82,8 +97,18 @@ public sealed class MeetingService : IAsyncDisposable
         if (State != RecordingState.Recording || _current is null)
             throw new InvalidOperationException("Not recording.");
 
+        try { await ProcessRecordingAsync(ct); }
+        finally
+        {
+            if (State != RecordingState.Idle)
+                SetState(RecordingState.Idle, "Processing stopped. The recorded audio remains saved locally.");
+        }
+    }
+
+    private async Task ProcessRecordingAsync(CancellationToken ct)
+    {
         var (micPath, sysPath) = _recorder.Stop();
-        _current.EndedUtc = DateTime.UtcNow;
+        _current!.EndedUtc = DateTime.UtcNow;
         MeetingStore.Save(_current);
 
         SetState(RecordingState.Transcribing, "Finishing the live transcript…");

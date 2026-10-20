@@ -2,6 +2,7 @@
 using System.Windows.Controls;
 using System.Windows.Media;
 using Biscotti.Core;
+using Biscotti.Core.Audio;
 using Biscotti.Core.Models;
 using Biscotti.Core.Storage;
 using Biscotti.Core.Transcription;
@@ -15,6 +16,7 @@ namespace Biscotti.Win
         private bool _recording;
         private bool _audioLoadErrorShown;
         private MeetingWindow? _liveMeetingWindow;
+        private AudioDevicesWindow? _deviceDialog;
         private readonly System.Windows.Threading.DispatcherTimer _healthTimer;
 
         public MainWindow()
@@ -23,7 +25,11 @@ namespace Biscotti.Win
             _settings = AppSettings.Load();
             WhisperRuntimeConfigurator.Apply(_settings); // before any WhisperFactory is created
             _meetings = new MeetingService(_settings);
-            _meetings.StateChanged += (state, msg) => Dispatcher.Invoke(() => StatusText.Text = msg);
+            _meetings.StateChanged += (state, msg) => Dispatcher.Invoke(() =>
+            {
+                StatusText.Text = msg;
+                UpdateDeviceControls();
+            });
             _meetings.AudioWarning += warning => Dispatcher.Invoke(() =>
                 MessageBox.Show(this, warning, "Audio recovery", MessageBoxButton.OK, MessageBoxImage.Warning));
             _meetings.CurrentMeetingUpdated += m => Dispatcher.Invoke(() =>
@@ -115,6 +121,27 @@ namespace Biscotti.Win
 
         private DateTime _recordingStartedUtc;
 
+        private void UpdateDeviceControls()
+        {
+            var canEdit = _meetings.State == RecordingState.Idle;
+            AudioDevicesButton.IsEnabled = canEdit;
+            _deviceDialog?.SetEditingEnabled(canEdit);
+        }
+
+        private void AudioDevicesButton_Click(object sender, RoutedEventArgs e) => ShowAudioDevices();
+
+        private void ShowAudioDevices()
+        {
+            if (_meetings.State != RecordingState.Idle) return;
+            _deviceDialog = new AudioDevicesWindow(_settings, () => _meetings.State == RecordingState.Idle) { Owner = this };
+            try
+            {
+                if (_deviceDialog.ShowDialog() == true)
+                    StatusText.Text = "Audio devices saved. Press Start recording when ready.";
+            }
+            finally { _deviceDialog = null; }
+        }
+
         /// <summary>
         /// Live proof of recording (issue #21): elapsed time plus per-channel
         /// bytes, with a warning when a channel looks dead so "is it working?"
@@ -132,6 +159,8 @@ namespace Biscotti.Win
             else if (mic == 0) warning = "  ⚠ mic silent";
             else if (sys == 0) warning = "  ⚠ system audio not detected — is anything playing?";
             StatusText.Text = $"Recording… {elapsed:hh\\:mm\\:ss} · mic {micMb} MB · speaker {sysMb} MB{warning}";
+            DeviceWarningText.Text = _meetings.RecordingDeviceWarning;
+            DeviceWarningText.Visibility = string.IsNullOrEmpty(DeviceWarningText.Text) ? Visibility.Collapsed : Visibility.Visible;
         }
 
         private ModelStore.WhisperModel CurrentOrPreferredModel() =>
@@ -184,7 +213,9 @@ namespace Biscotti.Win
             {
                 try
                 {
-                    _meetings.StartRecording();
+                    RecordButton.IsEnabled = false;
+                    DeviceWarningText.Visibility = Visibility.Collapsed;
+                    await _meetings.StartRecordingAsync();
                     _recording = true;
                     _recordingStartedUtc = DateTime.UtcNow;
                     if (_meetings.Current is { } meeting)
@@ -197,9 +228,19 @@ namespace Biscotti.Win
                     RecordButton.Background = new SolidColorBrush(Color.FromRgb(0x27, 0x7D, 0x5E));
                     _healthTimer.Start();
                 }
+                catch (AudioDeviceException ex)
+                {
+                    MessageBox.Show(this, ex.Message, "Choose audio devices", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    ShowAudioDevices();
+                }
                 catch (Exception ex)
                 {
                     MessageBox.Show(this, ex.Message, "Could not start recording");
+                }
+                finally
+                {
+                    UpdateDeviceControls();
+                    UpdateModelButtons();
                 }
                 return;
             }
@@ -262,6 +303,23 @@ namespace Biscotti.Win
             if (MeetingList.SelectedItem is Meeting m)
                 new MeetingWindow(m).ShowDialog();
             RefreshList();
+        }
+
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            if (_meetings.State == RecordingState.Starting)
+            {
+                e.Cancel = true;
+                StatusText.Text = "Finishing the audio device check. Close the window when it finishes.";
+            }
+            base.OnClosing(e);
+        }
+
+        protected override async void OnClosed(EventArgs e)
+        {
+            _healthTimer.Stop();
+            await _meetings.DisposeAsync();
+            base.OnClosed(e);
         }
     }
 }
