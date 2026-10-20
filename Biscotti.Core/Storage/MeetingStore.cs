@@ -109,8 +109,13 @@ public static class MeetingStore
             sb.AppendLine();
         }
         sb.AppendLine("## Transcript");
-        foreach (var l in m.Transcript.OrderBy(x => x.StartSeconds))
-            sb.AppendLine($"- [{TimeSpan.FromSeconds(l.StartSeconds):hh\\:mm\\:ss}] **{l.Speaker}**: {l.Text.Trim()}");
+        var timeline = m.Transcript
+            .Select(line => (line.StartSeconds, Markdown: $"- [{TimeSpan.FromSeconds(line.StartSeconds):hh\\:mm\\:ss}] **{line.Speaker}**: {line.Text.Trim()}"))
+            .Concat(m.TimestampedNotes.Select(note =>
+                (note.StartSeconds, Markdown: $"- [{TimeSpan.FromSeconds(note.StartSeconds):hh\\:mm\\:ss}] **Note**: {note.Text.Trim()}")))
+            .OrderBy(entry => entry.StartSeconds);
+        foreach (var entry in timeline)
+            sb.AppendLine(entry.Markdown);
         return sb.ToString();
     }
 }

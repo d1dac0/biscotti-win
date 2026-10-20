@@ -21,6 +21,7 @@ public sealed class MeetingService : IAsyncDisposable
     private readonly DualChannelRecorder _recorder = new();
     private readonly LoopbackSilenceMonitor _loopbackSilence = new(AutoStopSilenceTimeout);
     private readonly AppSettings _settings;
+    private readonly object _meetingMutationLock = new();
     private Meeting? _current;
     private LiveTranscriptionWorker? _liveTranscription;
     private Timer? _autoStopTimer;
@@ -39,7 +40,7 @@ public sealed class MeetingService : IAsyncDisposable
 
     private void SetState(RecordingState s, string message)
     {
-        State = s;
+        lock (_meetingMutationLock) State = s;
         StateChanged?.Invoke(s, message);
     }
 
@@ -108,10 +109,38 @@ public sealed class MeetingService : IAsyncDisposable
 
     private void AppendLiveLines(IReadOnlyList<TranscriptLine> lines)
     {
-        if (_current is null || lines.Count == 0) return;
-        _current.Transcript.AddRange(lines);
-        MeetingStore.Save(_current);
-        CurrentMeetingUpdated?.Invoke(_current);
+        if (lines.Count == 0) return;
+        Meeting? meeting;
+        lock (_meetingMutationLock)
+        {
+            meeting = _current;
+            if (meeting is null) return;
+            meeting.Transcript.AddRange(lines);
+            MeetingStore.Save(meeting);
+        }
+        CurrentMeetingUpdated?.Invoke(meeting);
+    }
+
+    public void AddTimestampedNote(string text, double startSeconds)
+    {
+        var trimmedText = text.Trim();
+        if (trimmedText.Length == 0) return;
+
+        Meeting meeting;
+        lock (_meetingMutationLock)
+        {
+            if (State != RecordingState.Recording || _current is null)
+                throw new InvalidOperationException("Timestamped notes can only be added while recording.");
+
+            meeting = _current;
+            meeting.TimestampedNotes.Add(new TimestampedMeetingNote
+            {
+                Text = trimmedText,
+                StartSeconds = Math.Max(0, startSeconds),
+            });
+            MeetingStore.Save(meeting);
+        }
+        CurrentMeetingUpdated?.Invoke(meeting);
     }
 
     public async Task StopAndProcessAsync(CancellationToken ct = default)

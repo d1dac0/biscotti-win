@@ -10,7 +10,14 @@ public sealed class Meeting
     public string? Summary { get; set; }
     public List<string> CalendarAttendees { get; set; } = new();
     public List<string> ActionItems { get; set; } = new();
+    public List<TimestampedMeetingNote> TimestampedNotes { get; set; } = new();
     public List<TranscriptLine> Transcript { get; set; } = new();
+}
+
+public sealed class TimestampedMeetingNote
+{
+    public required string Text { get; set; }
+    public required double StartSeconds { get; set; }
 }
 
 public sealed class TranscriptLine

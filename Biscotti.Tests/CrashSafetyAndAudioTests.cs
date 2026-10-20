@@ -185,6 +185,7 @@ public class CrashSafetyTests
             meeting.StartedUtc = DateTime.UtcNow;
             meeting.Title = "Crash safety roundtrip";
             meeting.Transcript.Add(new TranscriptLine { Speaker = "You", Text = "hello", StartSeconds = 0.5, EndSeconds = 1.3 });
+            meeting.TimestampedNotes.Add(new TimestampedMeetingNote { Text = "Follow up on this", StartSeconds = 0.2 });
             MeetingStore.Save(meeting);
 
             var loaded = MeetingStore.LoadAll();
@@ -193,6 +194,11 @@ public class CrashSafetyTests
             Assert.Equal("Crash safety roundtrip", match!.Title);
             Assert.Single(match.Transcript);
             Assert.Equal("You", match.Transcript[0].Speaker);
+            Assert.Single(match.TimestampedNotes);
+            Assert.Equal("Follow up on this", match.TimestampedNotes[0].Text);
+            var markdown = File.ReadAllText(Path.Combine(MeetingStore.MeetingDir(meeting.Id), "meeting.md"));
+            Assert.True(markdown.IndexOf("**Note**: Follow up on this", StringComparison.Ordinal)
+                < markdown.IndexOf("**You**: hello", StringComparison.Ordinal));
             // no temp leftovers
             Assert.Empty(Directory.GetFiles(MeetingStore.MeetingDir(meeting.Id), "*.tmp"));
             // markdown copy generated
@@ -204,6 +210,22 @@ public class CrashSafetyTests
             if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
             MeetingStore.RootOverride = null;
         }
+    }
+
+    [Fact]
+    public void MeetingStore_RenderMarkdown_InterleavesTimestampedNotesAndTranscript()
+    {
+        var meeting = new Meeting { Title = "Timeline" };
+        meeting.TimestampedNotes.Add(new TimestampedMeetingNote { Text = "decision", StartSeconds = 4 });
+        meeting.Transcript.Add(new TranscriptLine { Speaker = "You", Text = "start", StartSeconds = 1, EndSeconds = 2 });
+        meeting.Transcript.Add(new TranscriptLine { Speaker = "Speaker", Text = "response", StartSeconds = 6, EndSeconds = 7 });
+
+        var markdown = MeetingStore.RenderMarkdown(meeting);
+        var start = markdown.IndexOf("**You**: start", StringComparison.Ordinal);
+        var note = markdown.IndexOf("**Note**: decision", StringComparison.Ordinal);
+        var response = markdown.IndexOf("**Speaker**: response", StringComparison.Ordinal);
+
+        Assert.True(start >= 0 && start < note && note < response);
     }
 
     [Fact]
