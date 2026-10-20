@@ -32,7 +32,7 @@ back silently to the bundled CPU runtime.
 
 - CPU default never blocks or crashes a machine without NVIDIA hardware —
   the hard lesson from issue #3, proven again by the silent CPU fallback paths.
-- The GPU tier is ~50x faster measured (75.7x vs 1.38x realtime on a
+- The GPU tier is ~50x faster measured (75.7x vs 1.39x realtime on a
   4.8-min meeting WAV; see `docs/transcription-performance-matrix.md`), so it
   is worth a lucid opt-in with a visible one-time download.
 - Lifecycle: everything under `%LOCALAPPDATA%` is deletable, re-downloadable,
