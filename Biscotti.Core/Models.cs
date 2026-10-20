@@ -20,4 +20,4 @@ public sealed class TranscriptLine
     public double EndSeconds { get; set; }
 }
 
-public enum RecordingState { Idle, Recording, Transcribing, Summarizing }
+public enum RecordingState { Idle, Recording, Transcribing, Summarizing, Starting }

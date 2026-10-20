@@ -5,58 +5,48 @@ using System.Security.Cryptography;
 
 namespace Biscotti.Core.Audio;
 
-/// <summary>
-/// Dual-capture recorder: your microphone as "You", and Windows loopback of
-/// the default output device ("Speakers") as everyone else. 16-bit mono 16kHz
-/// streams, each written to its own WAV so transcription/merging can label
-/// speakers per channel. No bot joins the call — this just records what your
-/// machine plays and hears.
-///
-/// Channel counts and bytes written are exposed through <see cref="TotalBytes"/>
-/// so the UI can prove recording is actually alive (issue #21).
-/// </summary>
+/// <summary>Captures the chosen mic and output into separate encrypted audio containers.</summary>
 public sealed class DualChannelRecorder : IDisposable
 {
     private WaveInEvent? _mic;
     private WasapiLoopbackCapture? _loopback;
+    private MMDevice? _loopDevice;
     private EncryptedAudioWriter? _micWav;
     private EncryptedAudioWriter? _sysWav;
     private AntiAliasDecimator? _micDecimator;
     private AntiAliasDecimator? _sysDecimator;
+    private AudioDeviceWatch? _deviceWatch;
+    private readonly object _audioGate = new();
+    private readonly object _warningGate = new();
+    private readonly HashSet<string> _warnings = [];
+    private readonly ManualResetEventSlim _microphoneReady = new();
     private int _micChannels;
-    private int _sysChannels;
     private long _micBytes;
     private long _sysBytes;
+    private bool _acceptAudio;
+    private volatile bool _stopping = true;
+    private volatile string? _startupFailure;
 
     public string? MicWavPath { get; private set; }
     public string? SysWavPath { get; private set; }
-
-    /// <summary>Bytes written per channel since Start — zero means that channel is dead.</summary>
     public (long mic, long sys) TotalBytes => (Interlocked.Read(ref _micBytes), Interlocked.Read(ref _sysBytes));
-
-    /// <summary>
-    /// Why the mic channel is missing audio, or null when it opened fine.
-    /// A dead mic must not take the system channel down with it (issue #13).
-    /// </summary>
     public string? MicError { get; private set; }
+    public string DeviceWarning { get { lock (_warningGate) return string.Join("\n", _warnings); } }
 
-    public static (List<WaveInDeviceInfo> mics, List<MMDevice> speakers) ListDevices()
+    public void Start(string micWavPath, string sysWavPath, int? preferredMicDevice = null,
+        string? preferredSpeakerId = null, string? preferredMicName = null)
     {
-        var mics = new List<WaveInDeviceInfo>();
-        for (int i = 0; i < WaveInEvent.DeviceCount; i++)
-        {
-            var caps = WaveInEvent.GetCapabilities(i);
-            mics.Add(new WaveInDeviceInfo(i, caps.ProductName));
-        }
-        var speakers = new List<MMDevice>();
-        using var enums = new MMDeviceEnumerator();
-        foreach (var dev in enums.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
-            speakers.Add(dev);
-        return (mics, speakers);
-    }
-
-    public void Start(string micWavPath, string sysWavPath, int? preferredMicDevice = null, string? preferredSpeakerId = null)
-    {
+        var selection = new AppSettings { MicDeviceIndex = preferredMicDevice,
+            MicDeviceName = preferredMicName, SpeakerDeviceId = preferredSpeakerId };
+        var devices = AudioDevices.Enumerate();
+        AudioDevices.Validate(selection, devices);
+        ReleaseCapture();
+        Interlocked.Exchange(ref _micBytes, 0);
+        Interlocked.Exchange(ref _sysBytes, 0);
+        lock (_warningGate) _warnings.Clear();
+        MicError = null;
+        _startupFailure = null;
+        _microphoneReady.Reset();
         MicWavPath = micWavPath;
         SysWavPath = sysWavPath;
         var meetingKey = RandomNumberGenerator.GetBytes(32);
@@ -67,17 +57,27 @@ public sealed class DualChannelRecorder : IDisposable
         {
             _micWav = new EncryptedAudioWriter(micWavPath, meetingKey, micId);
             _sysWav = new EncryptedAudioWriter(sysWavPath, meetingKey, sysId);
+            lock (_audioGate) _acceptAudio = true;
+            _stopping = false;
+            CaptureStartup.Start(
+                () => StartMic(preferredMicDevice!.Value),
+                () => StartLoopback(preferredSpeakerId),
+                () => _microphoneReady.Wait(TimeSpan.FromSeconds(2)) && _startupFailure is null,
+                ReleaseCapture);
+            if (_startupFailure is not null) throw new AudioDeviceException(_startupFailure);
+            _deviceWatch = new AudioDeviceWatch(selection, devices, AddWarning);
         }
         catch
         {
-            _micWav?.Dispose();
-            _sysWav?.Dispose();
+            ReleaseCapture();
             throw;
         }
         finally { CryptographicOperations.ZeroMemory(meetingKey); }
+    }
 
-        StartMic(preferredMicDevice ?? 0);
-        StartLoopback(preferredSpeakerId);
+    private void AddWarning(string message)
+    {
+        lock (_warningGate) _warnings.Add(message);
     }
 
     private static uint RandomChannelId()
@@ -89,115 +89,129 @@ public sealed class DualChannelRecorder : IDisposable
 
     private void StartMic(int deviceNumber)
     {
-        // Preferred: ask the shared-mode audio engine for 16k mono directly.
-        // Some devices (Bluetooth HFP, some USB mics) reject the request
-        // (issue #13): fall back to a 48k capture and convert ourselves.
-        _mic = new WaveInEvent
+        try { OpenMicrophone(deviceNumber, AudioConfig.SampleRate); }
+        catch (Exception first)
         {
-            DeviceNumber = deviceNumber,
-            WaveFormat = new WaveFormat(AudioConfig.SampleRate, AudioConfig.BitsPerSample, AudioConfig.Channels),
-            BufferMilliseconds = 50,
-        };
-        _mic.DataAvailable += NativeMicDataAvailable;
-        try
-        {
-            _mic.StartRecording();
-            return;
-        }
-        catch (Exception ex)
-        {
-            MicError = $"16 kHz capture refused: {ex.Message}";
-        }
-        _mic.DataAvailable -= NativeMicDataAvailable;
-        _mic.Dispose();
-        _mic = null;
-
-        _mic = new WaveInEvent
-        {
-            DeviceNumber = deviceNumber,
-            WaveFormat = new WaveFormat(48000, AudioConfig.BitsPerSample, AudioConfig.Channels),
-            BufferMilliseconds = 50,
-        };
-        _micDecimator = new AntiAliasDecimator(48000);
-        _micChannels = _mic.WaveFormat.Channels;
-        _mic.DataAvailable += ConvertedMicDataAvailable;
-        try
-        {
-            _mic.StartRecording();
-        }
-        catch (Exception ex)
-        {
-            // Both rates refused (device gone, exclusive-mode hold, etc):
-            // keep the system channel recording and report the dead mic
-            // instead of aborting the whole meeting.
-            MicError = $"48 kHz fallback failed too: {ex.Message}";
-            _mic.DataAvailable -= ConvertedMicDataAvailable;
-            _mic.Dispose();
+            _mic?.Dispose();
             _mic = null;
-            _micDecimator = null;
+            _startupFailure = null;
+            _microphoneReady.Reset();
+            try { OpenMicrophone(deviceNumber, 48000); }
+            catch (Exception fallback)
+            {
+                MicError = $"Microphone refused 16 kHz ({first.Message}) and 48 kHz ({fallback.Message}).";
+                throw new AudioDeviceException(MicError + " Check its connection and permissions, then choose devices again.", fallback);
+            }
         }
     }
 
-    private void NativeMicDataAvailable(object? sender, WaveInEventArgs e)
+    private void OpenMicrophone(int deviceNumber, int sampleRate)
     {
-        // Shared-mode resampling already matches the whisper input format.
-        _micWav!.Append(e.Buffer.AsMemory(0, e.BytesRecorded));
-        Interlocked.Add(ref _micBytes, e.BytesRecorded);
+        _mic = new WaveInEvent
+        {
+            DeviceNumber = deviceNumber,
+            WaveFormat = new WaveFormat(sampleRate, AudioConfig.BitsPerSample, AudioConfig.Channels),
+            BufferMilliseconds = 50,
+        };
+        _micChannels = _mic.WaveFormat.Channels;
+        _micDecimator = sampleRate == AudioConfig.SampleRate ? null : new AntiAliasDecimator(sampleRate);
+        _mic.DataAvailable += MicDataAvailable;
+        _mic.RecordingStopped += CaptureStopped;
+        _mic.StartRecording();
     }
 
-    private void ConvertedMicDataAvailable(object? sender, WaveInEventArgs e)
+    private void MicDataAvailable(object? sender, WaveInEventArgs e)
     {
-        var mono16k = _micDecimator!.ProcessInt16(e.Buffer, e.BytesRecorded, _micChannels);
-        _micWav!.Append(mono16k);
-        Interlocked.Add(ref _micBytes, mono16k.Length);
+        lock (_audioGate)
+        {
+            if (!_acceptAudio || !ReferenceEquals(sender, _mic) || e.BytesRecorded == 0) return;
+            var pcm = _micDecimator is null ? e.Buffer.AsMemory(0, e.BytesRecorded)
+                : _micDecimator.ProcessInt16(e.Buffer, e.BytesRecorded, _micChannels).AsMemory();
+            _micWav!.Append(pcm);
+            Interlocked.Add(ref _micBytes, pcm.Length);
+            _microphoneReady.Set();
+        }
     }
 
-    private void StartLoopback(string? preferredSpeakerId)
+    private void StartLoopback(string? preferredId)
     {
-        var loopDevice = GetLoopDevice(preferredSpeakerId);
-        _loopback = new WasapiLoopbackCapture(loopDevice);
-        _sysDecimator = new AntiAliasDecimator(_loopback.WaveFormat.SampleRate);
-        _sysChannels = _loopback.WaveFormat.Channels;
-        _loopback.DataAvailable += LoopbackDataAvailable;
-        _loopback.StartRecording();
+        try
+        {
+            using var enumerator = new MMDeviceEnumerator();
+            _loopDevice = preferredId is null
+                ? enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Console)
+                : enumerator.GetDevice(preferredId);
+            if (_loopDevice.State != DeviceState.Active)
+                throw new AudioDeviceException("The selected output is no longer active.");
+            _loopback = new WasapiLoopbackCapture(_loopDevice);
+            _sysDecimator = new AntiAliasDecimator(_loopback.WaveFormat.SampleRate);
+            _loopback.DataAvailable += LoopbackDataAvailable;
+            _loopback.RecordingStopped += CaptureStopped;
+            _loopback.StartRecording();
+        }
+        catch (Exception ex)
+        {
+            throw new AudioDeviceException("The selected output could not start. Choose an available output in Audio devices. " + ex.Message, ex);
+        }
     }
 
     private void LoopbackDataAvailable(object? sender, WaveInEventArgs e)
     {
-        var mono16k = _sysDecimator!.ProcessFloat(e.Buffer, e.BytesRecorded, _loopback!.WaveFormat.Channels);
-        _sysWav!.Append(mono16k);
-        Interlocked.Add(ref _sysBytes, mono16k.Length);
+        lock (_audioGate)
+        {
+            if (!_acceptAudio || !ReferenceEquals(sender, _loopback)) return;
+            var mono16k = _sysDecimator!.ProcessFloat(e.Buffer, e.BytesRecorded, _loopback!.WaveFormat.Channels);
+            _sysWav!.Append(mono16k);
+            Interlocked.Add(ref _sysBytes, mono16k.Length);
+        }
     }
 
-    private static MMDevice GetLoopDevice(string? preferredId)
+    private void CaptureStopped(object? sender, StoppedEventArgs e)
     {
-        using var enums = new MMDeviceEnumerator();
-        if (!string.IsNullOrEmpty(preferredId))
-        {
-            var dev = enums.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
-                       .FirstOrDefault(d => d.ID == preferredId);
-            if (dev != null) return dev;
-        }
-        return enums.GetDefaultAudioEndpoint(DataFlow.Render, Role.Console);
+        if (_stopping || (!ReferenceEquals(sender, _mic) && !ReferenceEquals(sender, _loopback))) return;
+        var source = ReferenceEquals(sender, _mic) ? "Microphone" : "Output audio";
+        var message = source + " capture stopped unexpectedly. Stop and choose devices before starting a new recording."
+            + (e.Exception is null ? "" : " " + e.Exception.Message);
+        _startupFailure = message;
+        _microphoneReady.Set();
+        AddWarning(message);
     }
 
     public (string mic, string sys) Stop()
     {
+        ReleaseCapture();
+        return (MicWavPath ?? "", SysWavPath ?? "");
+    }
+
+    private void ReleaseCapture()
+    {
+        _stopping = true;
+        _deviceWatch?.Dispose();
+        _deviceWatch = null;
         try { _mic?.StopRecording(); } catch { }
         try { _loopback?.StopRecording(); } catch { }
-        // loopback needs a beat to flush its last packet
-        Thread.Sleep(200);
-        _micWav?.Close();
-        _sysWav?.Close();
-        return (MicWavPath ?? "", SysWavPath ?? "");
+        // Retain the existing bounded flush interval before closing the encrypted writers.
+        if (_mic is not null || _loopback is not null) Thread.Sleep(200);
+        lock (_audioGate) _acceptAudio = false;
+        try { _mic?.Dispose(); } catch { }
+        try { _loopback?.Dispose(); } catch { }
+        try { _loopDevice?.Dispose(); } catch { }
+        _mic = null;
+        _loopback = null;
+        _loopDevice = null;
+        lock (_audioGate)
+        {
+            try { _micWav?.Dispose(); }
+            finally { _micWav = null; try { _sysWav?.Dispose(); } finally { _sysWav = null; } }
+        }
+        _micDecimator = null;
+        _sysDecimator = null;
     }
 
     public void Dispose()
     {
-        _mic?.Dispose();
-        _loopback?.Dispose();
-        _micWav?.Dispose();
-        _sysWav?.Dispose();
+        ReleaseCapture();
+        _microphoneReady.Dispose();
     }
 }
 
