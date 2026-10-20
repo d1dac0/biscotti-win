@@ -1,5 +1,6 @@
 using Biscotti.Core.Ai;
 using Biscotti.Core.Audio;
+using Biscotti.Core.Calendar;
 using Biscotti.Core.Models;
 using Biscotti.Core.Storage;
 using Biscotti.Core.Transcription;
@@ -52,7 +53,8 @@ public sealed class MeetingService : IAsyncDisposable
         ? "Auto-stop armed: recording stops after 5 minutes without output audio."
         : "Auto-stop inactive until output audio is detected; in-person recording stays manual.";
 
-    public async Task StartRecordingAsync(int? targetProcessId = null, string? targetProcessName = null)
+    public async Task StartRecordingAsync(int? targetProcessId = null, string? targetProcessName = null,
+        CalendarMeeting? calendarMeeting = null)
     {
         if (State != RecordingState.Idle) throw new InvalidOperationException("A meeting is already in progress.");
         _loopbackSilence.Reset();
@@ -67,6 +69,11 @@ public sealed class MeetingService : IAsyncDisposable
                 var (meeting, dir) = MeetingStore.CreateNew();
                 pendingMeeting = meeting;
                 meeting.StartedUtc = DateTime.UtcNow;
+                if (calendarMeeting is not null)
+                {
+                    meeting.Title = calendarMeeting.Title;
+                    meeting.CalendarAttendees = calendarMeeting.Attendees.ToList();
+                }
                 _recorder.Start(Path.Combine(dir, "mic.wav"), Path.Combine(dir, "sys.wav"),
                     _settings.MicDeviceIndex, _settings.SpeakerDeviceId, _settings.MicDeviceName,
                     targetProcessId, targetProcessName);
@@ -210,13 +217,20 @@ public sealed class MeetingService : IAsyncDisposable
         var chunkProgress = new Progress<(int chunk, int total)>(p =>
             SetState(RecordingState.Summarizing,
                 $"Writing summary with local AI (part {p.chunk} of {p.total})…"));
-        var raw = await ollama.SummarizeMeetingAsync(_current.Transcript, chunkProgress, ct);
+        var raw = await ollama.SummarizeMeetingAsync(_current.Transcript, chunkProgress, ct, _current.CalendarAttendees);
         if (!string.IsNullOrWhiteSpace(raw))
         {
-            var (summary, actions, title) = SummaryParser.Parse(raw);
+            var (summary, actions, title, participantMatches) = SummaryParser.Parse(raw);
             _current.Summary = summary;
             _current.ActionItems = actions;
-            if (!string.IsNullOrWhiteSpace(title) && title.Length < 80) _current.Title = title;
+            if (string.IsNullOrWhiteSpace(_current.Title) && !string.IsNullOrWhiteSpace(title) && title.Length < 80)
+                _current.Title = title;
+            foreach (var (speakerLabel, attendeeName) in participantMatches)
+            {
+                if (!_current.CalendarAttendees.Contains(attendeeName, StringComparer.OrdinalIgnoreCase)) continue;
+                foreach (var line in _current.Transcript.Where(line => line.Speaker == speakerLabel))
+                    line.Speaker = attendeeName;
+            }
         }
 
         SetState(RecordingState.Idle, "Done — transcript and summary saved locally.");

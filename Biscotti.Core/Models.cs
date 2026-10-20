@@ -8,6 +8,7 @@ public sealed class Meeting
     public string Title { get; set; } = "";
     public string? Notes { get; set; }
     public string? Summary { get; set; }
+    public List<string> CalendarAttendees { get; set; } = new();
     public List<string> ActionItems { get; set; } = new();
     public List<TranscriptLine> Transcript { get; set; } = new();
 }

@@ -38,7 +38,7 @@ long transcripts, at-rest privacy, hardware changes mid-meeting.
 
 - [ ] #18 Tray icon, global hotkey and toast notifications (design: [tray, hotkey, and notifications](docs/specs/tray-hotkey-notifications.md))
 - [ ] #4 Auto-stop recording when the call ends ([spec](docs/specs/recording-auto-stop.md))
-- [ ] #5 Calendar-aware meeting prompts
+- [ ] #5 Calendar-aware meeting prompts (spec: [local iCalendar file source](docs/specs/calendar-awareness-local-ics.md))
 - [ ] #6 Custom vocabulary (names, products, jargon) passed to Whisper
 - [ ] #7 Timestamp-linked markdown notes in the meeting window
 - [ ] #8 MCP server: chat with your meeting notes from Claude Desktop / LM Studio

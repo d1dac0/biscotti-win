@@ -4,6 +4,7 @@ using System.Windows.Media;
 using System.Diagnostics;
 using Biscotti.Core;
 using Biscotti.Core.Audio;
+using Biscotti.Core.Calendar;
 using Biscotti.Core.Models;
 using Biscotti.Core.Storage;
 using Biscotti.Core.Transcription;
@@ -20,6 +21,8 @@ namespace Biscotti.Win
         private MeetingWindow? _liveMeetingWindow;
         private AudioDevicesWindow? _deviceDialog;
         private readonly System.Windows.Threading.DispatcherTimer _healthTimer;
+        private readonly System.Windows.Threading.DispatcherTimer _calendarTimer = new() { Interval = TimeSpan.FromMinutes(1) };
+        private IReadOnlyList<CalendarMeeting> _upcomingMeetings = Array.Empty<CalendarMeeting>();
 
         public MainWindow()
         {
@@ -58,6 +61,7 @@ namespace Biscotti.Win
             }
             _healthTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _healthTimer.Tick += (_, _) => UpdateRecordingHealth();
+            _calendarTimer.Tick += async (_, _) => await RefreshCalendarMeetingsAsync();
         }
 
         private async void OnFirstLoaded(object sender, RoutedEventArgs e)
@@ -66,6 +70,8 @@ namespace Biscotti.Win
             RefreshAudioApps();
             UpdateModelButtons();
             MaybeFirstRunGpuPrompt();
+            await RefreshCalendarMeetingsAsync();
+            _calendarTimer.Start();
             await LoadInitialMeetingsAsync();
         }
 
@@ -167,7 +173,80 @@ namespace Biscotti.Win
             var canEdit = _meetings.State == RecordingState.Idle;
             AudioDevicesButton.IsEnabled = canEdit;
             _deviceDialog?.SetEditingEnabled(canEdit);
+            UpdateCalendarControls();
         }
+
+        private void UpdateCalendarControls()
+        {
+            var canEdit = _meetings.State == RecordingState.Idle;
+            ChooseCalendarButton.IsEnabled = canEdit;
+            RefreshCalendarButton.IsEnabled = canEdit;
+            UpcomingMeetingsList.IsEnabled = canEdit;
+        }
+
+        private async Task RefreshCalendarMeetingsAsync(bool reportErrors = false)
+        {
+            var path = _settings.CalendarFilePath;
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                _upcomingMeetings = Array.Empty<CalendarMeeting>();
+                UpcomingMeetingsList.ItemsSource = _upcomingMeetings;
+                CalendarSourceText.Text = "";
+                CalendarEmptyText.Text = "Choose a local .ics file to see events in the next 24 hours.";
+                CalendarEmptyText.Visibility = Visibility.Visible;
+                return;
+            }
+
+            try
+            {
+                var meetings = await Task.Run(() => IcsCalendarReader.ReadUpcoming(path, DateTimeOffset.Now));
+                _upcomingMeetings = meetings;
+                UpcomingMeetingsList.ItemsSource = meetings;
+                CalendarSourceText.Text = $"Local calendar: {System.IO.Path.GetFileName(path)} · refreshed {DateTime.Now:t}";
+                CalendarEmptyText.Text = meetings.Count == 0
+                    ? "No upcoming meetings in the next 24 hours."
+                    : "";
+                CalendarEmptyText.Visibility = meetings.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                _upcomingMeetings = Array.Empty<CalendarMeeting>();
+                UpcomingMeetingsList.ItemsSource = _upcomingMeetings;
+                CalendarSourceText.Text = $"Local calendar: {System.IO.Path.GetFileName(path)}";
+                CalendarEmptyText.Text = "The selected calendar file could not be read. Choose another .ics file or check that it is available.";
+                CalendarEmptyText.Visibility = Visibility.Visible;
+                if (reportErrors)
+                    MessageBox.Show(this, ex.Message, "Calendar file unavailable", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private async void ChooseCalendarButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_meetings.State != RecordingState.Idle) return;
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Choose a local iCalendar export",
+                Filter = "iCalendar files (*.ics)|*.ics|All files (*.*)|*.*",
+                CheckFileExists = true,
+            };
+            if (dialog.ShowDialog(this) != true) return;
+
+            var previous = _settings.CalendarFilePath;
+            _settings.CalendarFilePath = dialog.FileName;
+            try
+            {
+                _settings.Save();
+                await RefreshCalendarMeetingsAsync(reportErrors: true);
+            }
+            catch (Exception ex)
+            {
+                _settings.CalendarFilePath = previous;
+                MessageBox.Show(this, ex.Message, "Could not save calendar selection", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void RefreshCalendarButton_Click(object sender, RoutedEventArgs e) =>
+            await RefreshCalendarMeetingsAsync(reportErrors: true);
 
         private void AudioDevicesButton_Click(object sender, RoutedEventArgs e) => ShowAudioDevices();
 
@@ -253,43 +332,71 @@ namespace Biscotti.Win
         {
             if (!_recording)
             {
-                try
-                {
-                    RecordButton.IsEnabled = false;
-                    DeviceWarningText.Visibility = Visibility.Collapsed;
-                    var selectedApp = AudioAppPicker.SelectedItem as AudioAppChoice;
-                    await _meetings.StartRecordingAsync(selectedApp?.ProcessId, selectedApp?.ProcessName);
-                    _recording = true;
-                    AudioAppPicker.IsEnabled = false;
-                    _recordingStopwatch = Stopwatch.StartNew();
-                    RecordingDurationText.Visibility = Visibility.Visible;
-                    if (_meetings.Current is { } meeting)
-                    {
-                        _liveMeetingWindow = new MeetingWindow(meeting, isLiveRecording: true) { Owner = this };
-                        _liveMeetingWindow.Closed += (_, _) => _liveMeetingWindow = null;
-                        _liveMeetingWindow.Show();
-                    }
-                    RecordButton.Content = "■  Stop";
-                    RecordButton.Background = new SolidColorBrush(Color.FromRgb(0x27, 0x7D, 0x5E));
-                    _healthTimer.Start();
-                    UpdateRecordingHealth();
-                }
-                catch (AudioDeviceException ex)
-                {
-                    MessageBox.Show(this, ex.Message, "Choose audio devices", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    ShowAudioDevices();
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(this, ex.Message, "Could not start recording");
-                }
-                finally
-                {
-                    UpdateDeviceControls();
-                    UpdateModelButtons();
-                }
+                await StartRecordingAsync();
                 return;
             }
+
+            await StopRecordingAsync();
+        }
+
+        private async void RecordUpcomingMeeting_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button { Tag: CalendarMeeting selectedMeeting }) return;
+            await StartRecordingAsync(selectedMeeting);
+        }
+
+        private async Task StartRecordingAsync(CalendarMeeting? calendarMeeting = null)
+        {
+            if (_meetings.State != RecordingState.Idle || _recording) return;
+            try
+            {
+                RecordButton.IsEnabled = false;
+                DeviceWarningText.Visibility = Visibility.Collapsed;
+                if (calendarMeeting is not null)
+                {
+                    await RefreshCalendarMeetingsAsync();
+                    calendarMeeting = _upcomingMeetings.FirstOrDefault(m => m.EventId == calendarMeeting.EventId);
+                    if (calendarMeeting is null)
+                    {
+                        StatusText.Text = "That calendar event is no longer upcoming. Refresh the calendar list and try again.";
+                        return;
+                    }
+                }
+                var selectedApp = AudioAppPicker.SelectedItem as AudioAppChoice;
+                await _meetings.StartRecordingAsync(selectedApp?.ProcessId, selectedApp?.ProcessName, calendarMeeting);
+                _recording = true;
+                AudioAppPicker.IsEnabled = false;
+                _recordingStopwatch = Stopwatch.StartNew();
+                RecordingDurationText.Visibility = Visibility.Visible;
+                if (_meetings.Current is { } meeting)
+                {
+                    _liveMeetingWindow = new MeetingWindow(meeting, isLiveRecording: true) { Owner = this };
+                    _liveMeetingWindow.Closed += (_, _) => _liveMeetingWindow = null;
+                    _liveMeetingWindow.Show();
+                }
+                RecordButton.Content = "■  Stop";
+                RecordButton.Background = new SolidColorBrush(Color.FromRgb(0x27, 0x7D, 0x5E));
+                _healthTimer.Start();
+                UpdateRecordingHealth();
+            }
+            catch (AudioDeviceException ex)
+            {
+                MessageBox.Show(this, ex.Message, "Choose audio devices", MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowAudioDevices();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not start recording");
+            }
+            finally
+            {
+                UpdateDeviceControls();
+                UpdateModelButtons();
+            }
+        }
+
+        private async Task StopRecordingAsync()
+        {
 
             _recording = false;
             AudioAppPicker.IsEnabled = true;
@@ -312,6 +419,7 @@ namespace Biscotti.Win
             {
                 _liveMeetingWindow?.SetRecordingComplete();
                 UpdateModelButtons();
+                UpdateDeviceControls();
             }
         }
 
@@ -405,6 +513,7 @@ namespace Biscotti.Win
         protected override async void OnClosed(EventArgs e)
         {
             _healthTimer.Stop();
+            _calendarTimer.Stop();
             DisposeShell();
             await _meetings.DisposeAsync();
             base.OnClosed(e);
