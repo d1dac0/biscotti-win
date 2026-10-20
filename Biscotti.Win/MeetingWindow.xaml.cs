@@ -12,6 +12,9 @@ namespace Biscotti.Win
     public partial class MeetingWindow : Window
     {
         private readonly Meeting _meeting;
+        private readonly bool _designPreview;
+        private bool _isLiveRecording;
+        private bool _isProcessing;
         private WaveOutEvent? _audioOutput;
         private WaveFileReader? _audioReader;
         private EventHandler<StoppedEventArgs>? _playbackStoppedHandler;
@@ -20,10 +23,13 @@ namespace Biscotti.Win
         private readonly Func<double>? _recordingElapsedSeconds;
 
         public MeetingWindow(Meeting meeting, bool isLiveRecording = false,
-            Action<string, double>? addTimestampedNote = null, Func<double>? recordingElapsedSeconds = null)
+            Action<string, double>? addTimestampedNote = null, Func<double>? recordingElapsedSeconds = null,
+            bool designPreview = false)
         {
             InitializeComponent();
             _meeting = meeting;
+            _designPreview = designPreview;
+            _isLiveRecording = isLiveRecording;
             _addTimestampedNote = addTimestampedNote;
             _recordingElapsedSeconds = recordingElapsedSeconds;
             DataContext = meeting;
@@ -39,6 +45,8 @@ namespace Biscotti.Win
             NotesGrid.RowDefinitions[2].Height = isLiveRecording ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
             AudioTab.IsEnabled = !isLiveRecording;
             RefreshTimestampedNotes();
+            UpdateReviewState();
+            if (!isLiveRecording && !string.IsNullOrWhiteSpace(meeting.Summary)) ReviewTabs.SelectedItem = SummaryTab;
             Closed += (_, _) => StopPlayback();
         }
 
@@ -48,6 +56,19 @@ namespace Biscotti.Win
             TranscriptList.ItemsSource = _meeting.Transcript;
             TranscriptScroller.ScrollToEnd();
             RefreshTimestampedNotes();
+            UpdateReviewState();
+        }
+
+        private void UpdateReviewState()
+        {
+            TranscriptEmptyText.Visibility = _meeting.Transcript.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            TranscriptEmptyText.Text = _isLiveRecording ? "Listening for speech… Your live transcript will appear here."
+                : "No transcript is available for this meeting yet.";
+            SummaryEmptyText.Visibility = string.IsNullOrWhiteSpace(_meeting.Summary) ? Visibility.Visible : Visibility.Collapsed;
+            SummaryEmptyText.Text = _isProcessing ? "Preparing your summary locally…"
+                : _isLiveRecording ? "Your summary will be prepared locally after recording stops."
+                : "No summary yet. Summaries need Ollama running locally with your configured model.";
+            ActionItemsGroup.Visibility = _meeting.ActionItems.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         }
 
         private void RefreshTimestampedNotes()
@@ -55,7 +76,7 @@ namespace Biscotti.Win
             var notes = _meeting.TimestampedNotes.OrderBy(note => note.StartSeconds).ToList();
             TimestampedNotesList.ItemsSource = notes;
             TimestampedNotesScroller.Visibility = notes.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-            NotesGrid.RowDefinitions[1].Height = notes.Count == 0 ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+            NotesGrid.RowDefinitions[1].Height = notes.Count == 0 ? new GridLength(0) : GridLength.Auto;
         }
 
         private void AddLiveNote_Click(object sender, RoutedEventArgs e)
@@ -77,6 +98,9 @@ namespace Biscotti.Win
 
         public void StopAddingTimestampedNotes()
         {
+            _isProcessing = true;
+            LiveStatus.Text = "Processing · preparing your transcript and summary locally";
+            SummaryEmptyText.Text = "Preparing your summary locally…";
             LiveNoteInput.IsEnabled = false;
             AddLiveNoteButton.IsEnabled = false;
             LiveNoteStatus.Text = "Recording stopped; notes are read-only while the meeting finishes.";
@@ -84,6 +108,8 @@ namespace Biscotti.Win
 
         public void SetRecordingComplete()
         {
+            _isLiveRecording = false;
+            _isProcessing = false;
             LiveStatus.Visibility = Visibility.Collapsed;
             DeleteButton.IsEnabled = true;
             SaveButton.IsEnabled = true;
@@ -94,6 +120,12 @@ namespace Biscotti.Win
             NotesBox.Visibility = Visibility.Visible;
             NotesGrid.RowDefinitions[2].Height = new GridLength(1, GridUnitType.Star);
             AudioTab.IsEnabled = true;
+            TitleBox.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty)?.UpdateTarget();
+            SummaryBox.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty)?.UpdateTarget();
+            GetBindingExpression(TitleProperty)?.UpdateTarget();
+            ActionItemsList.ItemsSource = _meeting.ActionItems;
+            RefreshTranscript();
+            if (!string.IsNullOrWhiteSpace(_meeting.Summary)) ReviewTabs.SelectedItem = SummaryTab;
         }
 
         private void MicPlay_Click(object sender, RoutedEventArgs e) =>
@@ -108,6 +140,7 @@ namespace Biscotti.Win
 
         private void BeginPlayback(string channel, string path)
         {
+            if (_designPreview) { AudioStatus.Text = "Preview only. No meeting audio is opened."; return; }
             var stopError = StopPlayback();
             if (stopError is not null)
             {
@@ -214,6 +247,7 @@ namespace Biscotti.Win
 
         private void Save_Click(object sender, RoutedEventArgs e)
         {
+            if (_designPreview) { Close(); return; }
             try
             {
                 MeetingStore.Save(_meeting);
@@ -229,6 +263,7 @@ namespace Biscotti.Win
 
         private void Delete_Click(object sender, RoutedEventArgs e)
         {
+            if (_designPreview) { Close(); return; }
             var ok = MessageBox.Show(this, "Delete this meeting and its audio? This cannot be undone.",
                 "Confirm delete", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (ok != MessageBoxResult.Yes) return;

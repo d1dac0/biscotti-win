@@ -5,5 +5,5 @@ dotnet restore "$root\BiscottiWin.slnx"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 dotnet build -c Release --no-restore --nologo "$root\BiscottiWin.slnx"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-dotnet test -c Release --no-build --nologo "$root\Biscotti.Tests\Biscotti.Tests.csproj"
+dotnet test -c Release --no-build --nologo "$root\BiscottiWin.slnx"
 exit $LASTEXITCODE

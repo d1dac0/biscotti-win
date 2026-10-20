@@ -1,6 +1,5 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using System.Diagnostics;
 using Biscotti.Core;
 using Biscotti.Core.Audio;
@@ -15,6 +14,7 @@ namespace Biscotti.Win
     {
         private readonly MeetingService _meetings;
         private readonly AppSettings _settings;
+        private readonly bool _designPreview;
         private bool _recording;
         private Stopwatch? _recordingStopwatch;
         private bool _meetingLoadErrorShown;
@@ -24,11 +24,12 @@ namespace Biscotti.Win
         private readonly System.Windows.Threading.DispatcherTimer _calendarTimer = new() { Interval = TimeSpan.FromMinutes(1) };
         private IReadOnlyList<CalendarMeeting> _upcomingMeetings = Array.Empty<CalendarMeeting>();
 
-        public MainWindow()
+        public MainWindow(bool designPreview = false)
         {
             InitializeComponent();
-            _settings = AppSettings.Load();
-            WhisperRuntimeConfigurator.Apply(_settings); // before any WhisperFactory is created
+            _designPreview = designPreview;
+            _settings = designPreview ? new AppSettings() : AppSettings.Load();
+            if (!designPreview) WhisperRuntimeConfigurator.Apply(_settings); // before any WhisperFactory is created
             _meetings = new MeetingService(_settings);
             _meetings.StateChanged += (state, msg) => Dispatcher.Invoke(() =>
             {
@@ -38,12 +39,17 @@ namespace Biscotti.Win
                     _healthTimer?.Stop();
                     _liveMeetingWindow?.StopAddingTimestampedNotes();
                     RecordButton.Content = "●  Start recording";
-                    RecordButton.Background = new SolidColorBrush(Color.FromRgb(0xC0, 0x39, 0x2B));
+                    RecordButton.SetResourceReference(BackgroundProperty, "AccentBrush");
                     RecordButton.IsEnabled = false;
                 }
                 StatusText.Text = msg;
+                UpdateRecordingPresentation(state);
                 UpdateDeviceControls();
-                if (state == RecordingState.Idle) UpdateModelButtons();
+                if (state == RecordingState.Idle)
+                {
+                    UpdateModelButtons();
+                    if (!_recording) _liveMeetingWindow?.SetRecordingComplete();
+                }
             });
             _meetings.AudioWarning += warning => Dispatcher.Invoke(() =>
                 MessageBox.Show(this, warning, "Audio recovery", MessageBoxButton.OK, MessageBoxImage.Warning));
@@ -53,9 +59,9 @@ namespace Biscotti.Win
                 if (_liveMeetingWindow?.IsVisible == true && _liveMeetingWindow.DataContext is Meeting live && live.Id == m.Id)
                     _liveMeetingWindow.RefreshTranscript();
             });
-            Loaded += OnFirstLoaded;
+            if (!designPreview) Loaded += OnFirstLoaded;
             var model = CurrentOrPreferredModel();
-            if (!ModelStore.IsDownloaded(model) && System.IO.File.Exists(ModelStore.ModelPath(model)))
+            if (!designPreview && !ModelStore.IsDownloaded(model) && System.IO.File.Exists(ModelStore.ModelPath(model)))
             {
                 // issue #32: present-but-truncated file — Download is the repair path
                 StatusText.Text = "Model file incomplete or corrupt — press Download model to repair.";
@@ -85,11 +91,14 @@ namespace Biscotti.Win
                 var meetings = await MeetingStore.LoadAllAsync();
                 var selectedId = (MeetingList.SelectedItem as Meeting)?.Id;
                 MeetingList.ItemsSource = meetings;
+                UpdateHistoryStatus(meetings.Count);
                 if (selectedId != Guid.Empty)
                     MeetingList.SelectedItem = meetings.FirstOrDefault(m => m.Id == selectedId);
             }
             catch (Exception ex)
             {
+                HistoryStatus.Text = "Saved meetings could not be loaded. Check the message below and reopen Biscotti to retry.";
+                HistoryStatus.Visibility = Visibility.Visible;
                 StatusText.Text = "Protected meeting data or audio could not be opened or migrated.";
                 if (!_meetingLoadErrorShown)
                 {
@@ -142,6 +151,7 @@ namespace Biscotti.Win
             ModelProgress.Visibility = Visibility.Visible;
             ModelProgress.Value = 0;
             RecordButton.IsEnabled = false;
+            ModelButton.IsEnabled = false;
             try
             {
                 var progress = new Progress<(double pct, string phase)>(p =>
@@ -173,6 +183,7 @@ namespace Biscotti.Win
         {
             var canEdit = _meetings.State == RecordingState.Idle;
             AudioDevicesButton.IsEnabled = canEdit;
+            AudioAppPicker.IsEnabled = canEdit;
             _deviceDialog?.SetEditingEnabled(canEdit);
             UpdateCalendarControls();
         }
@@ -223,6 +234,7 @@ namespace Biscotti.Win
 
         private async void ChooseCalendarButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_designPreview) return;
             if (_meetings.State != RecordingState.Idle) return;
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
@@ -247,12 +259,17 @@ namespace Biscotti.Win
         }
 
         private async void RefreshCalendarButton_Click(object sender, RoutedEventArgs e) =>
-            await RefreshCalendarMeetingsAsync(reportErrors: true);
+            await (_designPreview ? Task.CompletedTask : RefreshCalendarMeetingsAsync(reportErrors: true));
 
         private void AudioDevicesButton_Click(object sender, RoutedEventArgs e) => ShowAudioDevices();
 
         private void ShowAudioDevices()
         {
+            if (_designPreview)
+            {
+                new AudioDevicesWindow(_settings, () => true, designPreview: true) { Owner = this }.ShowDialog();
+                return;
+            }
             if (_meetings.State != RecordingState.Idle) return;
             _deviceDialog = new AudioDevicesWindow(_settings, () => _meetings.State == RecordingState.Idle) { Owner = this };
             try
@@ -297,9 +314,34 @@ namespace Biscotti.Win
         /// </summary>
         private void UpdateModelButtons()
         {
+            if (_designPreview) return;
             var downloaded = ModelStore.IsDownloaded(CurrentOrPreferredModel());
-            RecordButton.IsEnabled = downloaded;
+            RecordButton.IsEnabled = _recording || downloaded && _meetings.State == RecordingState.Idle;
             ModelButton.Visibility = downloaded ? Visibility.Collapsed : Visibility.Visible;
+            ModelButton.IsEnabled = _meetings.State == RecordingState.Idle && ModelProgress.Visibility != Visibility.Visible;
+            UpdateRecordingPresentation(_meetings.State, downloaded);
+        }
+
+        private void UpdateRecordingPresentation(RecordingState state, bool? modelReady = null)
+        {
+            var recording = state == RecordingState.Recording;
+            var busy = state != RecordingState.Idle && !recording;
+            ProcessingProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+            RecordingHeading.Text = recording ? "RECORDING NOW" : busy ? "PROCESSING" : "RECORD A MEETING";
+            SetupText.Text = recording ? "Your meeting is being captured" : busy ? "Finishing your meeting"
+                : modelReady == true ? "Ready when you are" : "Start with a local transcription model";
+            SetupHint.Text = recording ? "Open the live meeting window for your transcript and timestamped notes. Stop when you're ready."
+                : busy ? "Keep Biscotti open. Your transcript and summary are being prepared locally."
+                : "Download Whisper once, then record and transcribe offline. Summaries use Ollama on this PC.";
+            RecordButton.SetResourceReference(BackgroundProperty, recording ? "DangerBrush" : "AccentBrush");
+            RecordButton.SetResourceReference(BorderBrushProperty, recording ? "DangerBrush" : "AccentBrush");
+        }
+
+        private void UpdateHistoryStatus(int count)
+        {
+            HistoryStatus.Text = count == 0 ? "No meetings yet. Record your first meeting to see its transcript, summary and notes here."
+                : "Select a meeting and press Enter or choose Open selected meeting.";
+            HistoryStatus.Visibility = Visibility.Visible;
         }
 
         private void RefreshList(Meeting? update = null)
@@ -311,6 +353,8 @@ namespace Biscotti.Win
             }
             catch (Exception ex)
             {
+                HistoryStatus.Text = "Saved meetings could not be loaded. Reopen Biscotti after checking the storage error.";
+                HistoryStatus.Visibility = Visibility.Visible;
                 StatusText.Text = "Protected meeting data or audio could not be opened or migrated.";
                 if (!_meetingLoadErrorShown)
                 {
@@ -323,6 +367,7 @@ namespace Biscotti.Win
             }
             var selectedId = (MeetingList.SelectedItem as Meeting)?.Id;
             MeetingList.ItemsSource = meetings;
+            UpdateHistoryStatus(meetings.Count);
             if (update != null)
                 MeetingList.SelectedItem = meetings.FirstOrDefault(m => m.Id == update.Id) ?? meetings.FirstOrDefault();
             else if (selectedId != Guid.Empty)
@@ -331,6 +376,7 @@ namespace Biscotti.Win
 
         private async void RecordButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_designPreview) { TogglePreviewRecording(); return; }
             if (!_recording)
             {
                 await StartRecordingAsync();
@@ -342,6 +388,7 @@ namespace Biscotti.Win
 
         private async void RecordUpcomingMeeting_Click(object sender, RoutedEventArgs e)
         {
+            if (_designPreview) { TogglePreviewRecording(); return; }
             if (sender is not Button { Tag: CalendarMeeting selectedMeeting }) return;
             await StartRecordingAsync(selectedMeeting);
         }
@@ -378,8 +425,8 @@ namespace Biscotti.Win
                     _liveMeetingWindow.Closed += (_, _) => _liveMeetingWindow = null;
                     _liveMeetingWindow.Show();
                 }
-                RecordButton.Content = "■  Stop";
-                RecordButton.Background = new SolidColorBrush(Color.FromRgb(0x27, 0x7D, 0x5E));
+                RecordButton.Content = "■  Stop & save";
+                UpdateRecordingPresentation(RecordingState.Recording);
                 _healthTimer.Start();
                 UpdateRecordingHealth();
             }
@@ -418,7 +465,7 @@ namespace Biscotti.Win
             _liveMeetingWindow?.StopAddingTimestampedNotes();
             RecordingDurationText.Visibility = Visibility.Collapsed;
             RecordButton.Content = "●  Start recording";
-            RecordButton.Background = new SolidColorBrush(Color.FromRgb(0xC0, 0x39, 0x2B));
+            RecordButton.SetResourceReference(BackgroundProperty, "AccentBrush");
             RecordButton.IsEnabled = false;
             try
             {
@@ -438,10 +485,12 @@ namespace Biscotti.Win
 
         private async void ModelButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_designPreview) { StatusText.Text = "Preview only. No models are downloaded."; return; }
             var model = CurrentOrPreferredModel();
             ModelProgress.Visibility = Visibility.Visible;
             ModelProgress.Value = 0;
             RecordButton.IsEnabled = false;
+            ModelButton.IsEnabled = false;
             try
             {
                 var progress = new Progress<(double pct, string phase)>(p =>
@@ -468,6 +517,7 @@ namespace Biscotti.Win
 
         private void RefreshAudioApps()
         {
+            if (_designPreview) return;
             var selectedPid = (AudioAppPicker.SelectedItem as AudioAppChoice)?.ProcessId;
             var choices = new List<AudioAppChoice> { new(null, null, "All speaker audio (device loopback)") };
             foreach (var process in Process.GetProcesses())
@@ -494,18 +544,40 @@ namespace Biscotti.Win
 
         private void MeetingList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            // single-click just previews status; double-click opens for editing
+            OpenMeetingButton.IsEnabled = MeetingList.SelectedItem is Meeting;
+        }
+
+        private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_designPreview)
+                new SettingsWindow("Ctrl+Alt+R", "Atlas, Biscotti", (_, _) => null) { Owner = this }.ShowDialog();
+            else OpenSettingsFromShell();
+        }
+
+        private void OpenMeeting_Click(object sender, RoutedEventArgs e) => OpenSelectedMeeting();
+
+        private void MeetingList_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key != System.Windows.Input.Key.Enter || MeetingList.SelectedItem is not Meeting) return;
+            e.Handled = true;
+            OpenSelectedMeeting();
+        }
+
+        private void OpenSelectedMeeting()
+        {
+            if (MeetingList.SelectedItem is not Meeting meeting) return;
+            new MeetingWindow(meeting, designPreview: _designPreview) { Owner = this }.ShowDialog();
+            if (!_designPreview) RefreshList();
         }
 
         private void MeetingList_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (MeetingList.SelectedItem is Meeting m)
-                new MeetingWindow(m).ShowDialog();
-            RefreshList();
+            OpenSelectedMeeting();
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
+            if (_designPreview) { base.OnClosing(e); return; }
             if (!App.IsExitRequested)
             {
                 e.Cancel = true;

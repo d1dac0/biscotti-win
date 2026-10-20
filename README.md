@@ -74,10 +74,23 @@ the local model cache; no meeting audio is uploaded. See
 The measured scope and limitations are in the
 [speaker-clustering evaluation](docs/speaker-clustering-evaluation.md).
 
-## Roadmap (from Biscotti feature parity)
+## Feature parity and UI preview
 
-- Windows calendar awareness (offer to record before a meeting starts)
-- Voiceprint cross-meeting speaker matching (real per-person names)
-- Auto-stop when the call ends
-- Custom vocabulary
-- Markdown-notes linked to the moment they happened
+Windows already includes local .ics upcoming meetings, silence-based auto-stop,
+custom vocabulary and timestamped notes. They differ from the Mac workflows;
+the [source-backed parity review](docs/mac-feature-parity-review.md) records
+the coverage and linked follow-ups for calendar prompts, speaker identity,
+history search, export, recovery and richer note/audio navigation.
+
+To inspect the UI with synthetic meetings and no recording, model download or
+profile-data access, run from the repository root:
+
+```powershell
+dotnet run --project Biscotti.Win -- --design-preview=history
+```
+
+Other preview states: `setup`, `empty`, `recording`, `processing`, `failure`,
+`review`, `tray`. The preview uses the real WPF screens with in-memory Atlas
+sample data; saving/deleting cannot modify your meetings. Close the preview
+windows when finished. [Annotated visual comparisons](docs/parity-evidence/comparison.html)
+label Mac source diagrams separately from Windows runtime captures.

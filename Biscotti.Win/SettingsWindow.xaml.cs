@@ -20,7 +20,7 @@ public partial class SettingsWindow : Window
         if (!string.IsNullOrWhiteSpace(startupError))
         {
             MessageText.Text = startupError;
-            MessageText.Foreground = System.Windows.Media.Brushes.Firebrick;
+            MessageText.SetResourceReference(ForegroundProperty, "DangerBrush");
         }
     }
 
@@ -64,7 +64,7 @@ public partial class SettingsWindow : Window
         if (error is not null)
         {
             MessageText.Text = error;
-            MessageText.Foreground = System.Windows.Media.Brushes.Firebrick;
+            MessageText.SetResourceReference(ForegroundProperty, "DangerBrush");
             return;
         }
         DialogResult = true;

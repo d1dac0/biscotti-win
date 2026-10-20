@@ -44,6 +44,48 @@ long transcripts, at-rest privacy, hardware changes mid-meeting.
 - [ ] #8 MCP server: chat with your meeting notes from Claude Desktop / LM Studio
 - [x] #9 Per-participant diarization and real speaker names for loopback (PR #65; decision: [speaker diarization](docs/specs/speaker-diarization.md))
 
+## User-directed work: Mac feature parity and Windows experience (#79)
+
+**Status:** Approved for autonomous execution on 2026-10-20; implementation and local
+verification complete (99 tests and synthetic walkthrough); PR delivery in progress. Branch:
+`issue-79-mac-parity`. Initial review: 2026-10-20. See the
+[review](docs/mac-feature-parity-review.md) and
+[proposed UI decision](docs/specs/mac-parity-ui-alignment.md).
+
+1. Finish the source-backed capability inventory against pinned Mac/Windows
+   revisions, including tests, release materials and open issues. Record
+   implemented/partial/missing/platform-specific separately; create linked,
+   non-duplicate follow-ups for substantial gaps, with priorities, acceptance
+   criteria and dependencies.
+2. After approval, align existing WPF screens: shared warm surfaces and sage
+   accents, readable heading/body hierarchy, grouped setup/recording/calendar/
+   history sections, discoverable Settings, explicit empty/progress/error
+   states, consistent meeting-review tabs and settings/device dialogs. Keep
+   capture, local inference and encrypted storage behavior intact. Logo and
+   tray artwork remain owned by #53 / PR #55.
+3. Complete annotated screen comparisons with one synthetic meeting fixture,
+   run build/check and the Windows walkthrough, then deliver one PR for #79.
+   Actual Mac screenshots need a macOS capture source; source-derived diagrams
+   must be labelled as such and cannot be claimed as runtime screenshots.
+
+The user approved the plan and instructed the session to continue without
+waiting. Baseline build/check passed with 98 tests. #79 adds a native WPF flow
+test and synthetic preview; see the review/evidence index for final validation.
+
+### Parity follow-ups (separate issues; do not implement in #79)
+
+- #80 Guided first-run models and local AI settings (P2; recommended next).
+- #81 UI history search, organization and richer queries (P2).
+- #82 Local cross-meeting speaker identity and correction (P2).
+- #83 Explicit local import/export/copy workflows (P2).
+- #84 Retry processing and interrupted-job recovery (P2).
+- #85 Calendar context, prompts, preferences and tray previews (P2).
+- #86 Activity-aware auto-stop with countdown and user control (P2).
+- #87 Rendered Markdown and timestamp navigation (P2; audio jumps need #88).
+- #88 Persistent audio transport and seeking (P2).
+- #89 Mac runtime visual validation and Windows dark/appearance polish (P3).
+- #90 Microphone echo-control evaluation (P2).
+
 ## On-request audits
 
 Standing `type:audit` issues wait in the tracker for the human's explicit

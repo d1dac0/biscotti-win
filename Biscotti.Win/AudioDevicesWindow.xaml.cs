@@ -1,5 +1,4 @@
 using System.Windows;
-using System.Windows.Media;
 using Biscotti.Core;
 using Biscotti.Core.Audio;
 
@@ -9,13 +8,15 @@ public partial class AudioDevicesWindow : Window
 {
     private readonly AppSettings _settings;
     private readonly Func<bool> _canEdit;
+    private readonly bool _designPreview;
     private string? _pendingOutputId;
 
-    public AudioDevicesWindow(AppSettings settings, Func<bool> canEdit)
+    public AudioDevicesWindow(AppSettings settings, Func<bool> canEdit, bool designPreview = false)
     {
         InitializeComponent();
         _settings = settings;
         _canEdit = canEdit;
+        _designPreview = designPreview;
         LoadChoices(settings.MicDeviceIndex, settings.MicDeviceName, settings.SpeakerDeviceId);
         SetEditingEnabled(canEdit());
     }
@@ -33,7 +34,10 @@ public partial class AudioDevicesWindow : Window
         _pendingOutputId = outputId;
         try
         {
-            var devices = AudioDevices.Enumerate();
+            var devices = _designPreview
+                ? new AudioDeviceSnapshot(new[] { new WaveInDeviceInfo(0, "Synthetic microphone") },
+                    new[] { new OutputDeviceChoice(null, "Synthetic speakers") }, "synthetic-default")
+                : AudioDevices.Enumerate();
             MicrophoneBox.ItemsSource = devices.Microphones;
             OutputBox.ItemsSource = devices.Outputs;
             MicrophoneBox.SelectedItem = micIndex is null && micName is null
@@ -45,8 +49,9 @@ public partial class AudioDevicesWindow : Window
                 : outputId is null && devices.DefaultOutputId is null
                     ? "Windows has no default output. Connect an output device and refresh."
                     : "Devices are checked again when recording starts. Silent system audio is normal when nothing is playing.";
-            DeviceMessage.Foreground = MicrophoneBox.SelectedItem is null || OutputBox.SelectedItem is null
-                || outputId is null && devices.DefaultOutputId is null ? Brushes.Firebrick : Brushes.DimGray;
+            DeviceMessage.SetResourceReference(ForegroundProperty,
+                MicrophoneBox.SelectedItem is null || OutputBox.SelectedItem is null
+                || outputId is null && devices.DefaultOutputId is null ? "DangerBrush" : "MutedBrush");
         }
         catch (Exception ex) { ReportError("Could not list audio devices. " + ex.Message); }
     }
@@ -62,6 +67,7 @@ public partial class AudioDevicesWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
+        if (_designPreview) { DialogResult = true; return; }
         if (!_canEdit()) { SetEditingEnabled(false); return; }
         if (MicrophoneBox.SelectedItem is not WaveInDeviceInfo mic || OutputBox.SelectedItem is not OutputDeviceChoice output)
         {
@@ -91,6 +97,6 @@ public partial class AudioDevicesWindow : Window
     private void ReportError(string message)
     {
         DeviceMessage.Text = message;
-        DeviceMessage.Foreground = Brushes.Firebrick;
+        DeviceMessage.SetResourceReference(ForegroundProperty, "DangerBrush");
     }
 }
