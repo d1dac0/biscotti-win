@@ -2,7 +2,7 @@
 
 Captured 2026-10-20 with the isolated Project Atlas synthetic fixture in
 `Biscotti.Win/DesignPreview.cs`. Open [comparison.html](comparison.html) for
-annotated side-by-side source diagrams and runtime captures.
+annotated side-by-side source diagrams and runtime captures. A standalone [Mac source hierarchy diagram](mac-source-hierarchies.svg) is also attached to the PR.
 
 ## Provenance
 
@@ -78,4 +78,3 @@ Reproduce with:
 dotnet run --project Biscotti.Win -- --design-preview=history
 ```
 Other states: setup, empty, recording, processing, failure, review, tray.
-
