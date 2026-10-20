@@ -44,6 +44,34 @@ long transcripts, at-rest privacy, hardware changes mid-meeting.
 - [ ] #8 MCP server: chat with your meeting notes from Claude Desktop / LM Studio
 - [x] #9 Per-participant diarization and real speaker names for loopback (PR #65; decision: [speaker diarization](docs/specs/speaker-diarization.md))
 
+## User-directed work: Mac feature parity and Windows experience (#79)
+
+**Status:** Claimed; implementation plan awaiting approval. Branch:
+`issue-79-mac-parity`. Initial review: 2026-10-20. See the
+[review](docs/mac-feature-parity-review.md) and
+[proposed UI decision](docs/specs/mac-parity-ui-alignment.md).
+
+1. Finish the source-backed capability inventory against pinned Mac/Windows
+   revisions, including tests, release materials and open issues. Record
+   implemented/partial/missing/platform-specific separately; create linked,
+   non-duplicate follow-ups for substantial gaps, with priorities, acceptance
+   criteria and dependencies.
+2. After approval, align existing WPF screens: shared warm surfaces and sage
+   accents, readable heading/body hierarchy, grouped setup/recording/calendar/
+   history sections, discoverable Settings, explicit empty/progress/error
+   states, consistent meeting-review tabs and settings/device dialogs. Keep
+   capture, local inference and encrypted storage behavior intact. Logo and
+   tray artwork remain owned by #53 / PR #55.
+3. Complete annotated screen comparisons with one synthetic meeting fixture,
+   run build/check and the Windows walkthrough, then deliver one PR for #79.
+   Actual Mac screenshots need a macOS capture source; source-derived diagrams
+   must be labelled as such and cannot be claimed as runtime screenshots.
+
+Approval boundary: no app code changes before approval of this plan, per the
+repository's larger-task rule. Baseline build/check passed with 98 tests;
+existing warnings concern obsolete NAudio aliases and inexact reads in tests.
+No manual walkthrough or matched screenshot set has been completed yet.
+
 ## On-request audits
 
 Standing `type:audit` issues wait in the tracker for the human's explicit
