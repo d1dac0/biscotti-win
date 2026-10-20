@@ -1,12 +1,12 @@
 using Biscotti.Core.Models;
 using Biscotti.Core.Audio;
+using System.Security.Cryptography;
 
 namespace Biscotti.Core.Transcription;
 
 /// <summary>
 /// Reads completed, non-overlapping PCM windows from the recorder's growing
-/// WAV files and transcribes them serially. The source recordings remain the
-/// durable audio; temporary window WAVs are deleted after each pass.
+/// encrypted containers and transcribes them serially in memory.
 /// </summary>
 internal sealed class LiveTranscriptionWorker : IDisposable
 {
@@ -19,11 +19,12 @@ internal sealed class LiveTranscriptionWorker : IDisposable
     private readonly Channel _system;
     private readonly Func<(long mic, long sys)> _bytesWritten;
     private readonly WhisperTranscriber? _transcriber;
-    private readonly Func<string, string, CancellationToken, double, Task<List<TranscriptLine>>> _transcribe;
+    private readonly Func<Stream, string, CancellationToken, double, Task<List<TranscriptLine>>> _transcribe;
     private Task? _workerTask;
     private volatile bool _completing;
 
     public event Action<IReadOnlyList<TranscriptLine>>? LinesReady;
+    public event Action<string>? WarningReady;
 
     public LiveTranscriptionWorker(
         string micWavPath,
@@ -31,8 +32,8 @@ internal sealed class LiveTranscriptionWorker : IDisposable
         Func<(long mic, long sys)> bytesWritten,
         string modelPath)
     {
-        _mic = new Channel(micWavPath, "You");
-        _system = new Channel(systemWavPath, "Speaker");
+        _mic = new Channel(micWavPath, "You", allowLegacyPlaintext: false);
+        _system = new Channel(systemWavPath, "Speaker", allowLegacyPlaintext: false);
         _bytesWritten = bytesWritten;
         _transcriber = new WhisperTranscriber(modelPath);
         _transcribe = _transcriber.TranscribeWavAsync;
@@ -42,10 +43,11 @@ internal sealed class LiveTranscriptionWorker : IDisposable
         string micWavPath,
         string systemWavPath,
         Func<(long mic, long sys)> bytesWritten,
-        Func<string, string, CancellationToken, double, Task<List<TranscriptLine>>> transcribe)
+        Func<Stream, string, CancellationToken, double, Task<List<TranscriptLine>>> transcribe,
+        IMeetingKeyProtector? protector = null)
     {
-        _mic = new Channel(micWavPath, "You");
-        _system = new Channel(systemWavPath, "Speaker");
+        _mic = new Channel(micWavPath, "You", protector, allowLegacyPlaintext: true);
+        _system = new Channel(systemWavPath, "Speaker", protector, allowLegacyPlaintext: true);
         _bytesWritten = bytesWritten;
         _transcribe = transcribe;
     }
@@ -72,8 +74,12 @@ internal sealed class LiveTranscriptionWorker : IDisposable
             var didWork = await ProcessAvailableAsync(_mic, totals.mic);
             didWork |= await ProcessAvailableAsync(_system, totals.sys);
 
-            if (_completing && _mic.OffsetBytes >= totals.mic && _system.OffsetBytes >= totals.sys)
-                return;
+            if (_completing)
+            {
+                var micReadable = _mic.GetReadableLength(totals.mic);
+                var systemReadable = _system.GetReadableLength(totals.sys);
+                if (_mic.OffsetBytes >= micReadable && _system.OffsetBytes >= systemReadable) return;
+            }
 
             if (!didWork)
                 await Task.Delay(PollInterval);
@@ -82,57 +88,84 @@ internal sealed class LiveTranscriptionWorker : IDisposable
 
     private async Task<bool> ProcessAvailableAsync(Channel channel, long totalBytes)
     {
-        var available = totalBytes - channel.OffsetBytes;
+        if (totalBytes <= channel.OffsetBytes) return false;
+        var sourceLength = channel.GetReadableLength(totalBytes);
+        if (_completing && channel.Reader?.HasTruncatedTail == true && !channel.TruncationReported)
+        {
+            channel.TruncationReported = true;
+            WarningReady?.Invoke($"The final incomplete audio frame in {channel.Speaker} audio was discarded. Earlier authenticated audio remains available.");
+        }
+        var available = sourceLength - channel.OffsetBytes;
         if (available <= 0 || (!_completing && available < WindowBytes)) return false;
 
         var byteCount = (int)Math.Min(available, WindowBytes);
-        var pcm = ReadPcmRange(channel.Path, channel.OffsetBytes, byteCount);
         var offsetSeconds = (double)channel.OffsetBytes / BytesPerSecond;
-        var segmentPath = Path.Combine(
-            Path.GetDirectoryName(channel.Path)!,
-            $".{Path.GetFileNameWithoutExtension(channel.Path)}-live-{Guid.NewGuid():N}.wav");
-
-        try
-        {
-            var writer = new WavStreamWriter(segmentPath);
-            try
-            {
-                writer.Append(pcm);
-                writer.Close();
-            }
-            catch
-            {
-                writer.Dispose();
-                throw;
-            }
-
-            var lines = await _transcribe(segmentPath, channel.Speaker, CancellationToken.None, offsetSeconds);
-            if (lines.Count > 0) LinesReady?.Invoke(lines);
-        }
-        finally
-        {
-            try { File.Delete(segmentPath); } catch { }
-        }
+        using var wavStream = channel.OpenWavWindow(channel.OffsetBytes, byteCount);
+        var lines = await _transcribe(wavStream, channel.Speaker, CancellationToken.None, offsetSeconds);
+        if (lines.Count > 0) LinesReady?.Invoke(lines);
 
         channel.OffsetBytes += byteCount;
         return true;
     }
 
-    private static byte[] ReadPcmRange(string wavPath, long offsetBytes, int byteCount)
+    public void Dispose()
     {
-        var pcm = new byte[byteCount];
-        using var stream = new FileStream(wavPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        stream.Seek(44 + offsetBytes, SeekOrigin.Begin);
-        stream.ReadExactly(pcm);
-        return pcm;
+        _mic.Dispose();
+        _system.Dispose();
+        _transcriber?.Dispose();
     }
 
-    public void Dispose() => _transcriber?.Dispose();
-
-    private sealed class Channel(string path, string speaker)
+    private sealed class Channel : IDisposable
     {
-        public string Path { get; } = path;
-        public string Speaker { get; } = speaker;
+        public string Path { get; }
+        public string Speaker { get; }
         public long OffsetBytes { get; set; }
+        public bool TruncationReported { get; set; }
+        public EncryptedAudioReader? Reader { get; }
+
+        public Channel(string path, string speaker, IMeetingKeyProtector? protector = null, bool allowLegacyPlaintext = false)
+        {
+            Path = path;
+            Speaker = speaker;
+            if (EncryptedAudioFile.IsEncrypted(path))
+            {
+                try { Reader = new EncryptedAudioReader(path, protector); }
+                catch (CryptographicException ex) { throw MeetingAudioMigration.KeyAccessFailure(path, ex); }
+                catch (InvalidDataException ex) { throw new InvalidDataException($"Could not read {MeetingAudioMigration.AudioIdentity(path)}: {ex.Message}", ex); }
+            }
+            else if (File.Exists(path) && !allowLegacyPlaintext)
+            {
+                throw new InvalidDataException($"{MeetingAudioMigration.AudioIdentity(path)} does not have an encrypted audio header.");
+            }
+        }
+
+        public long GetReadableLength(long fallbackLength)
+        {
+            if (fallbackLength <= 0) return 0;
+            if (Reader is null) return Math.Min(fallbackLength, Math.Max(0, new FileInfo(Path).Length - 44));
+            Reader.Refresh();
+            return Math.Min(fallbackLength, Reader.PcmLength);
+        }
+
+        public Stream OpenWavWindow(long offset, int count)
+        {
+            if (Reader is not null)
+            {
+                try { return Reader.CreateWavStream(offset, count); }
+                catch (CryptographicException ex) { throw new CryptographicException($"Audio authentication failed for {MeetingAudioMigration.AudioIdentity(Path)}.", ex); }
+                catch (InvalidDataException ex) { throw new InvalidDataException($"Could not read {MeetingAudioMigration.AudioIdentity(Path)}: {ex.Message}", ex); }
+            }
+            var pcm = new byte[count];
+            using (var source = new FileStream(Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                source.Position = 44 + offset;
+                source.ReadExactly(pcm);
+            }
+            var wav = new MemoryStream(44 + count);
+            using (var writer = new WavStreamWriter(wav, leaveOpen: true)) { writer.Append(pcm); writer.Close(); }
+            return wav;
+        }
+
+        public void Dispose() => Reader?.Dispose();
     }
 }

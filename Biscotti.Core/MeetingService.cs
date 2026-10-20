@@ -3,6 +3,7 @@ using Biscotti.Core.Audio;
 using Biscotti.Core.Models;
 using Biscotti.Core.Storage;
 using Biscotti.Core.Transcription;
+using System.Security.Cryptography;
 
 namespace Biscotti.Core;
 
@@ -25,6 +26,7 @@ public sealed class MeetingService : IAsyncDisposable
     public RecordingState State { get; private set; } = RecordingState.Idle;
     public event Action<RecordingState, string>? StateChanged;
     public event Action<Meeting>? CurrentMeetingUpdated;
+    public event Action<string>? AudioWarning;
 
     public MeetingService(AppSettings settings) { _settings = settings; }
 
@@ -62,6 +64,7 @@ public sealed class MeetingService : IAsyncDisposable
             },
             _settings.GetResolvedModelPath());
         _liveTranscription.LinesReady += AppendLiveLines;
+        _liveTranscription.WarningReady += warning => AudioWarning?.Invoke(warning);
         _liveTranscription.Start();
         SetState(RecordingState.Recording, "Recording… click Stop when the call ends.");
     }
@@ -97,6 +100,18 @@ public sealed class MeetingService : IAsyncDisposable
         {
             throw;
         }
+        catch (CryptographicException)
+        {
+            throw;
+        }
+        catch (InvalidDataException)
+        {
+            throw;
+        }
+        catch (IOException)
+        {
+            throw;
+        }
         catch
         {
             SetState(RecordingState.Transcribing, "Live transcription failed; retrying from the saved audio…");
@@ -118,9 +133,9 @@ public sealed class MeetingService : IAsyncDisposable
         {
             // Defensive fallback if live transcription could not be started.
             using var transcriber = new WhisperTranscriber(_settings.GetResolvedModelPath());
-            var micLines = await transcriber.TranscribeWavAsync(micPath, "You", ct);
+            var micLines = await TranscribeSavedAudioAsync(transcriber, micPath, "You", ct);
             var sysLines = File.Exists(sysPath) && new FileInfo(sysPath).Length > 1000
-                ? await transcriber.TranscribeWavAsync(sysPath, "Speaker", ct)
+                ? await TranscribeSavedAudioAsync(transcriber, sysPath, "Speaker", ct)
                 : new List<TranscriptLine>();
             _current.Transcript = TranscriptAssembler.Merge(micLines, sysLines);
         }
@@ -145,6 +160,20 @@ public sealed class MeetingService : IAsyncDisposable
         SetState(RecordingState.Idle, "Done — transcript and summary saved locally.");
         MeetingStore.Save(_current);
         CurrentMeetingUpdated?.Invoke(_current);
+    }
+
+    private static async Task<List<TranscriptLine>> TranscribeSavedAudioAsync(
+        WhisperTranscriber transcriber, string path, string speaker, CancellationToken ct)
+    {
+        if (!EncryptedAudioFile.IsEncrypted(path))
+            throw new InvalidDataException($"{MeetingAudioMigration.AudioIdentity(path)} does not have an encrypted audio header.");
+        EncryptedAudioReader reader;
+        try
+        {
+            reader = new EncryptedAudioReader(path);
+        }
+        catch (CryptographicException ex) { throw MeetingAudioMigration.KeyAccessFailure(path, ex); }
+        return await transcriber.TranscribeWavAsync(reader.OpenWavStream(), speaker, ct);
     }
 
     public async ValueTask DisposeAsync()

@@ -1,5 +1,7 @@
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
+using System.Buffers.Binary;
+using System.Security.Cryptography;
 
 namespace Biscotti.Core.Audio;
 
@@ -17,8 +19,8 @@ public sealed class DualChannelRecorder : IDisposable
 {
     private WaveInEvent? _mic;
     private WasapiLoopbackCapture? _loopback;
-    private WavStreamWriter? _micWav;
-    private WavStreamWriter? _sysWav;
+    private EncryptedAudioWriter? _micWav;
+    private EncryptedAudioWriter? _sysWav;
     private AntiAliasDecimator? _micDecimator;
     private AntiAliasDecimator? _sysDecimator;
     private int _micChannels;
@@ -57,11 +59,32 @@ public sealed class DualChannelRecorder : IDisposable
     {
         MicWavPath = micWavPath;
         SysWavPath = sysWavPath;
-        _micWav = new WavStreamWriter(micWavPath);
-        _sysWav = new WavStreamWriter(sysWavPath);
+        var meetingKey = RandomNumberGenerator.GetBytes(32);
+        var micId = RandomChannelId();
+        var sysId = RandomChannelId();
+        while (sysId == micId) sysId = RandomChannelId();
+        try
+        {
+            _micWav = new EncryptedAudioWriter(micWavPath, meetingKey, micId);
+            _sysWav = new EncryptedAudioWriter(sysWavPath, meetingKey, sysId);
+        }
+        catch
+        {
+            _micWav?.Dispose();
+            _sysWav?.Dispose();
+            throw;
+        }
+        finally { CryptographicOperations.ZeroMemory(meetingKey); }
 
         StartMic(preferredMicDevice ?? 0);
         StartLoopback(preferredSpeakerId);
+    }
+
+    private static uint RandomChannelId()
+    {
+        Span<byte> id = stackalloc byte[4];
+        RandomNumberGenerator.Fill(id);
+        return BinaryPrimitives.ReadUInt32BigEndian(id);
     }
 
     private void StartMic(int deviceNumber)
