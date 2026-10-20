@@ -55,7 +55,7 @@ public sealed class MeetingService : IAsyncDisposable
         : "Auto-stop inactive until output audio is detected; in-person recording stays manual.";
 
     public async Task StartRecordingAsync(int? targetProcessId = null, string? targetProcessName = null,
-        CalendarMeeting? calendarMeeting = null)
+        CalendarMeeting? calendarMeeting = null, bool allowSystemWideLoopback = false)
     {
         if (State != RecordingState.Idle) throw new InvalidOperationException("A meeting is already in progress.");
         _loopbackSilence.Reset();
@@ -77,7 +77,7 @@ public sealed class MeetingService : IAsyncDisposable
                 }
                 _recorder.Start(Path.Combine(dir, "mic.wav"), Path.Combine(dir, "sys.wav"),
                     _settings.MicDeviceIndex, _settings.SpeakerDeviceId, _settings.MicDeviceName,
-                    targetProcessId, targetProcessName);
+                    targetProcessId, targetProcessName, allowSystemWideLoopback: allowSystemWideLoopback);
                 _liveTranscription = new LiveTranscriptionWorker(
                     Path.Combine(dir, "mic.wav"), Path.Combine(dir, "sys.wav"),
                     () => _recorder.TotalBytes, _settings.GetResolvedModelPath(), _settings.LocalVocabulary);

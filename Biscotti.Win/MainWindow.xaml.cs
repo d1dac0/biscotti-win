@@ -346,7 +346,7 @@ namespace Biscotti.Win
             await StartRecordingAsync(selectedMeeting);
         }
 
-        private async Task StartRecordingAsync(CalendarMeeting? calendarMeeting = null)
+        private async Task StartRecordingAsync(CalendarMeeting? calendarMeeting = null, bool allowSystemWideCapture = false)
         {
             if (_meetings.State != RecordingState.Idle || _recording) return;
             try
@@ -364,7 +364,8 @@ namespace Biscotti.Win
                     }
                 }
                 var selectedApp = AudioAppPicker.SelectedItem as AudioAppChoice;
-                await _meetings.StartRecordingAsync(selectedApp?.ProcessId, selectedApp?.ProcessName, calendarMeeting);
+                await _meetings.StartRecordingAsync(selectedApp?.ProcessId, selectedApp?.ProcessName, calendarMeeting,
+                    selectedApp?.ProcessId is null || allowSystemWideCapture);
                 _recording = true;
                 AudioAppPicker.IsEnabled = false;
                 _recordingStopwatch = Stopwatch.StartNew();
@@ -386,6 +387,14 @@ namespace Biscotti.Win
             {
                 MessageBox.Show(this, ex.Message, "Choose audio devices", MessageBoxButton.OK, MessageBoxImage.Warning);
                 ShowAudioDevices();
+            }
+            catch (SystemWideCaptureConsentException ex)
+            {
+                var answer = MessageBox.Show(this,
+                    $"{ex.Message}\n\nThis captures speaker audio from every app, which may include notifications, music, or unrelated conversations. Retry with all speaker audio?",
+                    "Confirm all speaker audio", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (answer == MessageBoxResult.Yes)
+                    await StartRecordingAsync(calendarMeeting, allowSystemWideCapture: true);
             }
             catch (Exception ex)
             {
