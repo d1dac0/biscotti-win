@@ -3,4 +3,5 @@
   <Project Path="Biscotti.Mcp/Biscotti.Mcp.csproj" />
   <Project Path="Biscotti.Tests/Biscotti.Tests.csproj" />
   <Project Path="Biscotti.Win/Biscotti.Win.csproj" />
+  <Project Path="tools/SpeakerEvaluation/SpeakerEvaluation.csproj" />
 </Solution>
