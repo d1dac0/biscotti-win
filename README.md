@@ -13,6 +13,10 @@ Records your meetings and turns them into speaker-labeled transcripts and AI sum
 
 Nothing leaves your machine. Ollama is optional — without it you still get the transcript.
 
+## Tray controls
+
+Biscotti Win stays available from the notification area. Closing the main window hides it in the tray; use the tray menu's **Exit** command to quit. The icon reflects whether the app is idle, recording, or processing. **Ctrl+Alt+R** starts or stops recording by default; change the shortcut from **Settings** in the tray menu. Windows controls whether the summary-ready notification appears during Focus Assist / Do not disturb.
+
 ## Build
 
 ```powershell

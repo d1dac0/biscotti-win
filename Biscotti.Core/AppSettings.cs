@@ -15,6 +15,8 @@ public sealed class AppSettings
     /// the lazily downloaded CUDA runtime is installed; CPU is the fallback.
     /// </summary>
     public string? WhisperRuntime { get; set; }
+    /// <summary>Global Start/Stop shortcut (issue #18), such as Ctrl+Alt+R.</summary>
+    public string? RecordingHotkey { get; set; } = "Ctrl+Alt+R";
 
     public string GetResolvedModelPath()
     {

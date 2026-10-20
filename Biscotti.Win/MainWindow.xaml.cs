@@ -307,10 +307,19 @@ namespace Biscotti.Win
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
-            if (_meetings.State == RecordingState.Starting)
+            if (!App.IsExitRequested)
             {
                 e.Cancel = true;
-                StatusText.Text = "Finishing the audio device check. Close the window when it finishes.";
+                if (_meetings.State == RecordingState.Starting)
+                    StatusText.Text = "Finishing the audio device check. The app will stay in the tray.";
+                Hide();
+                base.OnClosing(e);
+                return;
+            }
+            if (_meetings.State != RecordingState.Idle)
+            {
+                e.Cancel = true;
+                StatusText.Text = "Stop and finish processing the meeting before exiting.";
             }
             base.OnClosing(e);
         }
@@ -318,6 +327,7 @@ namespace Biscotti.Win
         protected override async void OnClosed(EventArgs e)
         {
             _healthTimer.Stop();
+            DisposeShell();
             await _meetings.DisposeAsync();
             base.OnClosed(e);
         }
