@@ -10,7 +10,13 @@
     <UseWindowsForms>true</UseWindowsForms>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <ApplicationHighDpiMode>SystemAware</ApplicationHighDpiMode>
+    <ApplicationIcon>Assets\biscotti.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\biscotti.ico" />
+    <Resource Include="Assets\biscotti.png" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260804001" />

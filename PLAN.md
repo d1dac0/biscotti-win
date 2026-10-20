@@ -36,6 +36,7 @@ long transcripts, at-rest privacy, hardware changes mid-meeting.
 **Goal:** reduce friction around meetings and make output immediately useful.
 
 - [ ] #18 Tray icon, global hotkey and toast notifications (design: [tray, hotkey, and notifications](docs/specs/tray-hotkey-notifications.md))
+- [ ] #53 Use the Biscotti logo for window and tray icons
 - [ ] #4 Auto-stop recording when the call ends ([spec](docs/specs/recording-auto-stop.md))
 - [ ] #5 Calendar-aware meeting prompts
 - [ ] #6 Custom vocabulary (names, products, jargon) passed to Whisper

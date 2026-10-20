@@ -1,6 +1,7 @@
 <Window x:Class="Biscotti.Win.AudioDevicesWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Icon="pack://application:,,,/Assets/biscotti.ico"
         Title="Audio devices" Width="560" SizeToContent="Height"
         ResizeMode="NoResize" WindowStartupLocation="CenterOwner" Background="#FAF9F6">
     <StackPanel Margin="24">
