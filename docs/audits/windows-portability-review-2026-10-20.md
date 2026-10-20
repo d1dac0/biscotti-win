@@ -190,7 +190,7 @@ retired: measured CPU RTF is 1.39× by the matrix's definition. The matrix's
 | Windows UX: single instance and notifications? | Tray, hotkey, Windows notifications, mutex, and current-user activation pipe are implemented. | Keep duplicate-launch/exit tests and manual Focus Assist verification in release smoke. |
 | Windows UX: calendar? | Local ICS input avoids cloud auth and Graph tokens. | Preserve the local-only default; any future online provider needs a separate opt-in decision. |
 | Windows UX: health? | Persistent device warnings and a one-second snapshot poll expose many failures. | Perform physical disconnect/default-device tests and verify process-loopback app exit is surfaced. |
-| Scope/build: what is the Windows boundary? | The product is a .NET 9 WPF/WASAPI app; do not port the upstream macOS app by adding Windows conditionals around AppKit/CoreAudio/XPC. | Keep shared data/AI contracts separate from Windows audio, storage, shell, and process adapters. |
+| Scope/build: what is the Windows boundary? | The product is a .NET 10 WPF/WASAPI app; do not port the upstream macOS app by adding Windows conditionals around AppKit/CoreAudio/XPC. | Keep shared data/AI contracts separate from Windows audio, storage, shell, and process adapters. |
 | Scope/build: package and sign? | No release packaging/signing path exists. | Choose format and code-signing workflow before public distribution. |
 | Scope/build: can the upstream code be reused? | The upstream README declares PolyForm Perimeter 1.0.1 and this project describes itself as a Windows PC port. | Obtain rights review before distributing a product that may compete with the upstream software. |
 

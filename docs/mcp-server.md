@@ -35,7 +35,7 @@ path with the absolute path to the checkout):
 {
   "mcpServers": {
     "biscotti": {
-      "command": "C:\\path\\to\\BiscottiWin\\Biscotti.Mcp\\bin\\Release\\net9.0-windows\\win-x64\\Biscotti.Mcp.exe",
+      "command": "C:\\path\\to\\BiscottiWin\\Biscotti.Mcp\\bin\\Release\\net10.0-windows\\win-x64\\Biscotti.Mcp.exe",
       "args": []
     }
   }

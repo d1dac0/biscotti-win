@@ -12,7 +12,7 @@ Implementing `ActivateAudioInterfaceAsync` and its COM completion handler direct
 
 ## Why
 
-The app already targets .NET 9, which NAudio 3 supports. NAudio 3 includes process-loopback capture with child-process-tree support, avoiding custom activation interop. A per-recording process choice avoids persisting stale PIDs. The Windows 10 warning preserves the story's stated compatibility behavior.
+The app targets .NET 10, which NAudio 3 supports. NAudio 3 includes process-loopback capture with child-process-tree support, avoiding custom activation interop. A per-recording process choice avoids persisting stale PIDs. The Windows 10 warning preserves the story's stated compatibility behavior.
 
 ## References
 

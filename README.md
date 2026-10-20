@@ -21,14 +21,19 @@ Biscotti Win stays available from the notification area. Closing the main window
 
 ```powershell
 dotnet build -c Release
-Biscotti.Win\bin\Release\net9.0-windows\Biscotti.Win.exe
+Biscotti.Win\bin\Release\net10.0-windows10.0.17763.0\win-x64\Biscotti.Win.exe
 ```
 
 ## Requirements
 
 - Windows 10/11 with a microphone
-- .NET 9 SDK (to build)
+- .NET 10 SDK (to build)
 - Optional: [Ollama](https://ollama.com) installed with `ollama pull gemma3:4b` for AI summaries
+
+## Install a release
+
+Windows release ZIP install, update, uninstall, and retained-data steps are in
+[the Windows release guide](docs/windows-release.md).
 
 ## Data location
 

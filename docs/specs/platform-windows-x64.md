@@ -4,7 +4,7 @@
 
 ## Decision
 
-Biscotti Win targets Windows x64 exclusively: WPF on `net9.0-windows`,
+Biscotti Win targets Windows x64 exclusively: WPF on `net10.0-windows`,
 x64-only native runtimes (Whisper.net win-x64; the GPU tier is Windows x64
 only), PowerShell-based repo tooling (`tools/*.ps1`). Cross-platform (macOS)
 is explicitly out of scope for now.
