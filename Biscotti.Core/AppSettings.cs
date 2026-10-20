@@ -19,6 +19,8 @@ public sealed class AppSettings
     public string? WhisperRuntime { get; set; }
     /// <summary>Global Start/Stop shortcut (issue #18), such as Ctrl+Alt+R.</summary>
     public string? RecordingHotkey { get; set; } = "Ctrl+Alt+R";
+    /// <summary>Path to the user's local iCalendar export; no calendar contents are copied or uploaded.</summary>
+    public string? CalendarFilePath { get; set; }
 
     public string GetResolvedModelPath()
     {

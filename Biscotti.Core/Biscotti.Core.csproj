@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Ical.Net" Version="5.2.3" />
     <PackageReference Include="NAudio" Version="3.2.0" />
     <!-- CPU-only Whisper runtime bundled by default: works on every Windows
          machine (issue #3). The opt-in GPU/CUDA tier is NOT a package ref —

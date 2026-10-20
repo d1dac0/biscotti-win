@@ -14,6 +14,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -48,7 +49,42 @@
         <TextBlock x:Name="DeviceWarningText" Grid.Row="3" Foreground="#9B2C20" TextWrapping="Wrap"
                    Margin="0,0,0,12" Visibility="Collapsed" AutomationProperties.LiveSetting="Polite"/>
 
-        <ListBox x:Name="MeetingList" Grid.Row="4" HorizontalContentAlignment="Stretch"
+        <StackPanel Grid.Row="4" Margin="0,0,0,12">
+            <DockPanel Margin="0,0,0,6">
+                <TextBlock Text="Upcoming meetings" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="ChooseCalendarButton" Content="Choose .ics file" Padding="12,4"
+                            Click="ChooseCalendarButton_Click"/>
+                    <Button x:Name="RefreshCalendarButton" Content="Refresh" Margin="8,0,0,0" Padding="12,4"
+                            Click="RefreshCalendarButton_Click"/>
+                </StackPanel>
+            </DockPanel>
+            <TextBlock x:Name="CalendarSourceText" Foreground="#668" FontSize="11" Margin="0,0,0,4"/>
+            <TextBlock x:Name="CalendarEmptyText" Text="Choose a local .ics file to see events in the next 24 hours."
+                       Foreground="#668" Margin="0,4,0,0"/>
+            <ScrollViewer MaxHeight="142" VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="UpcomingMeetingsList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="8,5" Margin="0,2" Background="#F0EEE8" CornerRadius="4">
+                                <DockPanel LastChildFill="True">
+                                    <Button DockPanel.Dock="Right" Content="Record" Padding="12,3" Margin="8,0,0,0"
+                                            Tag="{Binding}" Click="RecordUpcomingMeeting_Click"/>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                                        <TextBlock Foreground="#668" FontSize="12"
+                                                   Text="{Binding StartsAt, StringFormat={}{0:ddd, MMM d · h:mm tt}}"/>
+                                        <TextBlock Foreground="#668" FontSize="11" Text="{Binding AttendeesDisplay}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </StackPanel>
+
+        <ListBox x:Name="MeetingList" Grid.Row="5" HorizontalContentAlignment="Stretch"
                  Background="Transparent" BorderThickness="0"
                  MouseDoubleClick="MeetingList_DoubleClick"
                  SelectionChanged="MeetingList_SelectionChanged">
