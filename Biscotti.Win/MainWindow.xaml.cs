@@ -27,8 +27,17 @@ namespace Biscotti.Win
             _meetings = new MeetingService(_settings);
             _meetings.StateChanged += (state, msg) => Dispatcher.Invoke(() =>
             {
+                if (state == RecordingState.Transcribing && _recording)
+                {
+                    _recording = false;
+                    _healthTimer?.Stop();
+                    RecordButton.Content = "●  Start recording";
+                    RecordButton.Background = new SolidColorBrush(Color.FromRgb(0xC0, 0x39, 0x2B));
+                    RecordButton.IsEnabled = false;
+                }
                 StatusText.Text = msg;
                 UpdateDeviceControls();
+                if (state == RecordingState.Idle) UpdateModelButtons();
             });
             _meetings.AudioWarning += warning => Dispatcher.Invoke(() =>
                 MessageBox.Show(this, warning, "Audio recovery", MessageBoxButton.OK, MessageBoxImage.Warning));
@@ -158,7 +167,7 @@ namespace Biscotti.Win
             if (mic == 0 && sys == 0) warning = "  ⚠ no audio captured on either channel — check microphone in Windows sound settings";
             else if (mic == 0) warning = "  ⚠ mic silent";
             else if (sys == 0) warning = "  ⚠ system audio not detected — is anything playing?";
-            StatusText.Text = $"Recording… {elapsed:hh\\:mm\\:ss} · mic {micMb} MB · speaker {sysMb} MB{warning}";
+            StatusText.Text = $"Recording… {elapsed:hh\\:mm\\:ss} · mic {micMb} MB · speaker {sysMb} MB{warning} · {_meetings.AutoStopStatus}";
             DeviceWarningText.Text = _meetings.RecordingDeviceWarning;
             DeviceWarningText.Visibility = string.IsNullOrEmpty(DeviceWarningText.Text) ? Visibility.Collapsed : Visibility.Visible;
         }

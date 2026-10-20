@@ -16,17 +16,25 @@ namespace Biscotti.Core;
 /// </summary>
 public sealed class MeetingService : IAsyncDisposable
 {
+    private static readonly TimeSpan AutoStopSilenceTimeout = TimeSpan.FromMinutes(5);
     private readonly DualChannelRecorder _recorder = new();
+    private readonly LoopbackSilenceMonitor _loopbackSilence = new(AutoStopSilenceTimeout);
     private readonly AppSettings _settings;
     private Meeting? _current;
     private LiveTranscriptionWorker? _liveTranscription;
+    private Timer? _autoStopTimer;
+    private int _stopProcessStarted;
 
     public RecordingState State { get; private set; } = RecordingState.Idle;
     public event Action<RecordingState, string>? StateChanged;
     public event Action<Meeting>? CurrentMeetingUpdated;
     public event Action<string>? AudioWarning;
 
-    public MeetingService(AppSettings settings) { _settings = settings; }
+    public MeetingService(AppSettings settings)
+    {
+        _settings = settings;
+        _recorder.LoopbackSamplesAvailable += OnLoopbackSamplesAvailable;
+    }
 
     private void SetState(RecordingState s, string message)
     {
@@ -39,10 +47,14 @@ public sealed class MeetingService : IAsyncDisposable
     /// <summary>Live per-channel byte counts for the UI's recording-health readout (issue #21).</summary>
     public (long mic, long sys) RecordingStats => _recorder.TotalBytes;
     public string RecordingDeviceWarning => _recorder.DeviceWarning;
+    public string AutoStopStatus => _loopbackSilence.IsArmed
+        ? "Auto-stop armed: recording stops after 5 minutes without output audio."
+        : "Auto-stop inactive until output audio is detected; in-person recording stays manual.";
 
     public async Task StartRecordingAsync()
     {
         if (State != RecordingState.Idle) throw new InvalidOperationException("A meeting is already in progress.");
+        _loopbackSilence.Reset();
         SetState(RecordingState.Starting, "Checking audio devices…");
         var previousMeeting = _current;
         Meeting? pendingMeeting = null;
@@ -65,6 +77,7 @@ public sealed class MeetingService : IAsyncDisposable
             _liveTranscription.WarningReady += warning => AudioWarning?.Invoke(warning);
             _liveTranscription.Start();
             SetState(RecordingState.Recording, "Recording… click Stop when the call ends.");
+            _autoStopTimer = new Timer(CheckForLoopbackSilence, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         }
         catch
         {
@@ -94,16 +107,38 @@ public sealed class MeetingService : IAsyncDisposable
 
     public async Task StopAndProcessAsync(CancellationToken ct = default)
     {
+        if (Interlocked.CompareExchange(ref _stopProcessStarted, 1, 0) != 0) return;
         if (State != RecordingState.Recording || _current is null)
+        {
+            Interlocked.Exchange(ref _stopProcessStarted, 0);
             throw new InvalidOperationException("Not recording.");
+        }
 
+        StopAutoStopTimer();
         try { await ProcessRecordingAsync(ct); }
         finally
         {
             if (State != RecordingState.Idle)
                 SetState(RecordingState.Idle, "Processing stopped. The recorded audio remains saved locally.");
+            Interlocked.Exchange(ref _stopProcessStarted, 0);
         }
     }
+
+    private void OnLoopbackSamplesAvailable(byte[] samples, int bytesRecorded, int channels) =>
+        _loopbackSilence.Observe(samples, bytesRecorded, channels, DateTimeOffset.UtcNow);
+
+    private void CheckForLoopbackSilence(object? state)
+    {
+        if (State != RecordingState.Recording || !_loopbackSilence.HasTimedOut(DateTimeOffset.UtcNow)) return;
+        StopAutoStopTimer();
+        _ = Task.Run(async () =>
+        {
+            try { await StopAndProcessAsync(); }
+            catch (Exception ex) { AudioWarning?.Invoke("Auto-stop could not finish processing the meeting. " + ex.Message); }
+        });
+    }
+
+    private void StopAutoStopTimer() => Interlocked.Exchange(ref _autoStopTimer, null)?.Dispose();
 
     private async Task ProcessRecordingAsync(CancellationToken ct)
     {
@@ -203,6 +238,7 @@ public sealed class MeetingService : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        StopAutoStopTimer();
         try { _recorder.Stop(); } catch { }
         try { await (_liveTranscription?.CompleteAsync() ?? Task.CompletedTask); } catch { }
         _liveTranscription?.Dispose();
