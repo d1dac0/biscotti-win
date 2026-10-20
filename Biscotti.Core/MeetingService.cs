@@ -238,6 +238,9 @@ public sealed class MeetingService : IAsyncDisposable
             _current.Transcript = TranscriptAssembler.Merge(micLines, sysLines);
         }
 
+        var systemLines = _current.Transcript.Where(line => line.Speaker != "You").ToList();
+        await ApplySpeakerDiarizationAsync(sysPath, systemLines, ct);
+
         CurrentMeetingUpdated?.Invoke(_current);
         MeetingStore.Save(_current);
 
@@ -262,6 +265,8 @@ public sealed class MeetingService : IAsyncDisposable
             }
         }
 
+        SpeakerIntroductionResolver.Apply(_current.Transcript);
+
         SetState(RecordingState.Idle, "Done — transcript and summary saved locally.");
         MeetingStore.Save(_current);
         CurrentMeetingUpdated?.Invoke(_current);
@@ -279,6 +284,38 @@ public sealed class MeetingService : IAsyncDisposable
         }
         catch (CryptographicException ex) { throw MeetingAudioMigration.KeyAccessFailure(path, ex); }
         return await transcriber.TranscribeWavAsync(reader.OpenWavStream(), speaker, ct);
+    }
+
+    private async Task ApplySpeakerDiarizationAsync(
+        string systemAudioPath, List<TranscriptLine> systemLines, CancellationToken ct)
+    {
+        if (!SpeakerDiarizer.HasSuitableSegments(systemLines) || !File.Exists(systemAudioPath)) return;
+
+        try
+        {
+            var downloadProgress = new Progress<(double pct, string phase)>(progress =>
+                SetState(RecordingState.Transcribing, progress.phase));
+            var modelPath = await SpeakerEmbeddingModelStore.EnsureDownloadedAsync(downloadProgress, ct);
+            SetState(RecordingState.Transcribing, "Clustering remote speakers locally…");
+            var applied = await Task.Run(() =>
+            {
+                using var encryptedReader = new EncryptedAudioReader(systemAudioPath);
+                using var wavStream = encryptedReader.OpenWavStream();
+                var embeddings = SpeakerDiarizer.ExtractEmbeddings(wavStream, systemLines, modelPath);
+                return SpeakerDiarizer.ApplyEmbeddings(systemLines, embeddings);
+            }, ct);
+
+            if (!applied)
+                AudioWarning?.Invoke("Speaker identification had too little clear loopback speech; using the basic speaker labels.");
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            AudioWarning?.Invoke("Local speaker identification was unavailable; using the basic speaker labels. " + ex.Message);
+        }
     }
 
     public async ValueTask DisposeAsync()

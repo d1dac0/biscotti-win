@@ -131,7 +131,7 @@ public sealed class OllamaService : IDisposable
         1. A 2-3 sentence summary of the meeting.
         2. A bulleted list of concrete action items with owners if stated ("- [ ] Owner: task").
         3. The most likely meeting title (short).
-        4. Match transcript speaker labels to known attendee names only when the transcript provides clear evidence, such as a speaker introducing themselves. Never infer a match from the invite alone. The app's Speaker N labels mark uninterrupted transcript segments, not diarized identities; only rename the exact segment label supported by the transcript.
+        4. Match transcript speaker labels to names only when the transcript provides clear evidence, such as a speaker introducing themselves. Never infer a match from the invite alone. Speaker N labels are voice clusters from speaker embeddings; only rename the exact label supported by the transcript.
 
         Format exactly as:
         ## Summary
@@ -144,7 +144,7 @@ public sealed class OllamaService : IDisposable
         Speaker N: attendee name, one per supported match; otherwise write none.
 
         {{FormatAttendeeContext(knownAttendees)}}
-        Transcript (labels "You" = person at this PC, "Speaker N" = other participant):
+        Transcript (labels "You" = person at this PC, "Speaker N" = a remote voice cluster):
         {{text}}
         """;
 
@@ -164,7 +164,7 @@ public sealed class OllamaService : IDisposable
         Speaker N: attendee name, one per supported match; otherwise write none.
 
         {{FormatAttendeeContext(knownAttendees)}}
-        Part {{part}} of {{total}} transcript (labels "You" = person at this PC, "Speaker N" = other participant):
+        Part {{part}} of {{total}} transcript (labels "You" = person at this PC, "Speaker N" = a remote voice cluster):
         {{text}}
         """;
 
