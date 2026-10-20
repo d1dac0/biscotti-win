@@ -32,6 +32,7 @@ public sealed class DualChannelRecorder : IDisposable
     public (long mic, long sys) TotalBytes => (Interlocked.Read(ref _micBytes), Interlocked.Read(ref _sysBytes));
     public string? MicError { get; private set; }
     public string DeviceWarning { get { lock (_warningGate) return string.Join("\n", _warnings); } }
+    public event Action<byte[], int, int>? LoopbackSamplesAvailable;
 
     public void Start(string micWavPath, string sysWavPath, int? preferredMicDevice = null,
         string? preferredSpeakerId = null, string? preferredMicName = null)
@@ -157,13 +158,16 @@ public sealed class DualChannelRecorder : IDisposable
 
     private void LoopbackDataAvailable(object? sender, WaveInEventArgs e)
     {
+        int channels;
         lock (_audioGate)
         {
             if (!_acceptAudio || !ReferenceEquals(sender, _loopback)) return;
+            channels = _loopback!.WaveFormat.Channels;
             var mono16k = _sysDecimator!.ProcessFloat(e.Buffer, e.BytesRecorded, _loopback!.WaveFormat.Channels);
             _sysWav!.Append(mono16k);
             Interlocked.Add(ref _sysBytes, mono16k.Length);
         }
+        LoopbackSamplesAvailable?.Invoke(e.Buffer, e.BytesRecorded, channels);
     }
 
     private void CaptureStopped(object? sender, StoppedEventArgs e)

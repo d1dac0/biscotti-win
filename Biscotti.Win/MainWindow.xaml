@@ -14,7 +14,7 @@
         <StackPanel Grid.Row="0">
             <TextBlock Text="🍅 Biscotti Win" FontSize="26" FontWeight="SemiBold"/>
             <TextBlock x:Name="StatusText" Foreground="#555" Margin="0,6,0,0"
-                       Text="All local. Nothing leaves this PC."/>
+                       Text="All local. Nothing leaves this PC." TextWrapping="Wrap"/>
         </StackPanel>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,16,0,16">
