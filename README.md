@@ -56,6 +56,15 @@ speaker-labeled transcripts. The server reads the same local `meeting.json`
 files as the app and does not open audio files or contact remote services.
 See [the MCP setup guide](docs/mcp-server.md) for build and client configuration.
 
+## Remote speaker labels
+
+After recording, Biscotti locally groups remote transcript segments using
+speaker embeddings. It can replace a cluster label with a real name when the
+person introduces themselves or the transcript clearly matches an attendee.
+The first processed meeting downloads the 26.5 MB English speaker model into
+the local model cache; no meeting audio is uploaded. See
+[third-party notices](docs/THIRD-PARTY-NOTICES.md) for model attribution.
+
 ## Roadmap (from Biscotti feature parity)
 
 - Windows calendar awareness (offer to record before a meeting starts)

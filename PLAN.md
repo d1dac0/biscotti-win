@@ -42,7 +42,7 @@ long transcripts, at-rest privacy, hardware changes mid-meeting.
 - [ ] #6 Custom vocabulary (names, products, jargon) passed to Whisper
 - [ ] #7 Timestamp-linked markdown notes in the meeting window
 - [ ] #8 MCP server: chat with your meeting notes from Claude Desktop / LM Studio
-- [ ] #9 Per-participant diarization and real speaker names for loopback
+- [x] #9 Per-participant diarization and real speaker names for loopback (PR #65; decision: [speaker diarization](docs/specs/speaker-diarization.md))
 
 ## On-request audits
 
