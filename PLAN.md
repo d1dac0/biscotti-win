@@ -112,3 +112,17 @@ was decided, the alternatives, and why. Write the spec **before** building on
 the decision; if one is genuinely overturned, write a new spec and mark the old
 one `Superseded`; if you must build before deciding, mark it `Assumed` and
 revisit before the feature is done. See `docs/specs/README.md`.
+
+## Active work: meeting history search (#81)
+
+1. Share literal substring matching with MCP; add ranked in-memory snippets.
+2. Add accessible search, clear/open controls and local-month history groups.
+3. Cover search, empty/protected failure and WPF flows; run build/check and
+   a synthetic Windows walkthrough before PR delivery.
+
+Decision: [meeting history search](docs/specs/meeting-history-search.md).
+Baseline: build/check passed (98 Core/MCP tests + 1 WPF test); existing NAudio
+obsolete and inexact test-read warnings remain outside this issue.
+
+#81 verification complete: 108 tests passed and native synthetic keyboard
+walkthrough passed. See [verification](docs/meeting-history-search-verification.md).

@@ -21,7 +21,7 @@ public sealed class MeetingQueryService
         var normalizedQuery = query.Trim();
         var boundedLimit = Math.Clamp(limit, 1, MaximumSearchLimit);
         var matches = _loadMeetings()
-            .Where(meeting => Matches(meeting, normalizedQuery))
+            .Where(meeting => Biscotti.Core.MeetingHistorySearch.Matches(meeting, normalizedQuery))
             .ToList();
 
         return new SearchMeetingsResponse(
@@ -69,18 +69,6 @@ public sealed class MeetingQueryService
             Message: null,
             Lines: page);
     }
-
-    private static bool Matches(Meeting meeting, string query)
-    {
-        if (query.Length == 0) return true;
-        if (Contains(meeting.Title, query) || Contains(meeting.Summary, query) || Contains(meeting.Notes, query)) return true;
-        if (meeting.ActionItems.Any(item => Contains(item, query))) return true;
-        if (meeting.TimestampedNotes.Any(note => Contains(note.Text, query))) return true;
-        return meeting.Transcript.Any(line => Contains(line.Text, query) || Contains(line.Speaker, query));
-    }
-
-    private static bool Contains(string? value, string query) =>
-        value?.Contains(query, StringComparison.OrdinalIgnoreCase) == true;
 
     private static MeetingSearchResult ToSearchResult(Meeting meeting) =>
         new(meeting.Id, meeting.Title, meeting.StartedUtc, meeting.EndedUtc,

@@ -61,9 +61,7 @@ public partial class MainWindow
         PreviewBanner.Visibility = Visibility.Visible;
         var meeting = DesignPreview.CreateMeeting();
         var empty = mode is "setup" or "empty";
-        MeetingList.ItemsSource = empty ? new List<Meeting>() : new List<Meeting> { meeting };
-        if (!empty) MeetingList.SelectedItem = meeting;
-        UpdateHistoryStatus(empty ? 0 : 1);
+        SetHistory(empty ? new List<Meeting>() : new List<Meeting> { meeting }, empty ? null : meeting.Id);
         AudioAppPicker.ItemsSource = new[] { new AudioAppChoice(null, null, "All speaker audio (synthetic preview)") };
         AudioAppPicker.SelectedIndex = 0;
         ModelButton.Visibility = mode == "setup" ? Visibility.Visible : Visibility.Collapsed;
@@ -93,7 +91,7 @@ public partial class MainWindow
         {
             DeviceWarningText.Text = "The selected microphone is unavailable. Reconnect it, then choose Audio devices and try again.";
             DeviceWarningText.Visibility = Visibility.Visible;
-            HistoryStatus.Text = "Saved meetings could not be loaded. Reopen Biscotti after checking the storage error.";
+            ShowHistoryFailure();
             MeetingList.ItemsSource = new List<Meeting>();
             StatusText.Text = "Recording did not start. Check Audio devices and try again.";
         }
