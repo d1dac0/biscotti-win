@@ -17,8 +17,9 @@ public static class AudioConfig
 /// </summary>
 public sealed class WavStreamWriter : IDisposable
 {
-    private readonly FileStream _fs;
+    private readonly Stream _fs;
     private readonly BinaryWriter _bw;
+    private readonly bool _leaveOpen;
     private long _dataBytes;
     private bool _closed;
 
@@ -26,6 +27,15 @@ public sealed class WavStreamWriter : IDisposable
     {
         _fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
         _bw = new BinaryWriter(_fs, Encoding.UTF8, leaveOpen: false);
+        WriteHeaderPlaceholder();
+    }
+
+    public WavStreamWriter(Stream stream, bool leaveOpen = false)
+    {
+        if (!stream.CanSeek || !stream.CanWrite) throw new ArgumentException("WAV output must be seekable and writable.", nameof(stream));
+        _fs = stream;
+        _leaveOpen = leaveOpen;
+        _bw = new BinaryWriter(_fs, Encoding.UTF8, leaveOpen: true);
         WriteHeaderPlaceholder();
     }
 
@@ -87,5 +97,9 @@ public sealed class WavStreamWriter : IDisposable
         Dispose();
     }
 
-    public void Dispose() { _bw.Dispose(); _fs.Dispose(); }
+    public void Dispose()
+    {
+        _bw.Dispose();
+        if (!_leaveOpen) _fs.Dispose();
+    }
 }

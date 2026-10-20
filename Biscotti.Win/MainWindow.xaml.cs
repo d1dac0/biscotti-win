@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Diagnostics;
 using Biscotti.Core;
+using Biscotti.Core.Audio;
 using Biscotti.Core.Models;
 using Biscotti.Core.Storage;
 using Biscotti.Core.Transcription;
@@ -14,20 +15,33 @@ namespace Biscotti.Win
         private readonly MeetingService _meetings;
         private readonly AppSettings _settings;
         private bool _recording;
+        private bool _audioLoadErrorShown;
         private MeetingWindow? _liveMeetingWindow;
+        private AudioDevicesWindow? _deviceDialog;
         private readonly System.Windows.Threading.DispatcherTimer _healthTimer;
 
         public MainWindow()
         {
             InitializeComponent();
-            RefreshAudioApps();
-            AudioCaptureHint.Text = Environment.OSVersion.Version.Build < 22000
-                ? "Windows 10 captures all speaker audio. Mute notifications and music during the meeting."
-                : "Choose the meeting app to capture only its audio; without a selection, all speaker audio is captured.";
             _settings = AppSettings.Load();
             WhisperRuntimeConfigurator.Apply(_settings); // before any WhisperFactory is created
             _meetings = new MeetingService(_settings);
-            _meetings.StateChanged += (state, msg) => Dispatcher.Invoke(() => StatusText.Text = msg);
+            _meetings.StateChanged += (state, msg) => Dispatcher.Invoke(() =>
+            {
+                if (state == RecordingState.Transcribing && _recording)
+                {
+                    _recording = false;
+                    _healthTimer?.Stop();
+                    RecordButton.Content = "●  Start recording";
+                    RecordButton.Background = new SolidColorBrush(Color.FromRgb(0xC0, 0x39, 0x2B));
+                    RecordButton.IsEnabled = false;
+                }
+                StatusText.Text = msg;
+                UpdateDeviceControls();
+                if (state == RecordingState.Idle) UpdateModelButtons();
+            });
+            _meetings.AudioWarning += warning => Dispatcher.Invoke(() =>
+                MessageBox.Show(this, warning, "Audio recovery", MessageBoxButton.OK, MessageBoxImage.Warning));
             _meetings.CurrentMeetingUpdated += m => Dispatcher.Invoke(() =>
             {
                 RefreshList(m);
@@ -35,6 +49,7 @@ namespace Biscotti.Win
                     _liveMeetingWindow.RefreshTranscript();
             });
             RefreshList();
+            RefreshAudioApps();
             UpdateModelButtons();
             var model = CurrentOrPreferredModel();
             if (!ModelStore.IsDownloaded(model) && System.IO.File.Exists(ModelStore.ModelPath(model)))
@@ -117,6 +132,27 @@ namespace Biscotti.Win
 
         private DateTime _recordingStartedUtc;
 
+        private void UpdateDeviceControls()
+        {
+            var canEdit = _meetings.State == RecordingState.Idle;
+            AudioDevicesButton.IsEnabled = canEdit;
+            _deviceDialog?.SetEditingEnabled(canEdit);
+        }
+
+        private void AudioDevicesButton_Click(object sender, RoutedEventArgs e) => ShowAudioDevices();
+
+        private void ShowAudioDevices()
+        {
+            if (_meetings.State != RecordingState.Idle) return;
+            _deviceDialog = new AudioDevicesWindow(_settings, () => _meetings.State == RecordingState.Idle) { Owner = this };
+            try
+            {
+                if (_deviceDialog.ShowDialog() == true)
+                    StatusText.Text = "Audio devices saved. Press Start recording when ready.";
+            }
+            finally { _deviceDialog = null; }
+        }
+
         /// <summary>
         /// Live proof of recording (issue #21): elapsed time plus per-channel
         /// bytes, with a warning when a channel looks dead so "is it working?"
@@ -133,7 +169,9 @@ namespace Biscotti.Win
             if (mic == 0 && sys == 0) warning = "  ⚠ no audio captured on either channel — check microphone in Windows sound settings";
             else if (mic == 0) warning = "  ⚠ mic silent";
             else if (sys == 0) warning = "  ⚠ system audio not detected — is anything playing?";
-            StatusText.Text = $"Recording… {elapsed:hh\\:mm\\:ss} · mic {micMb} MB · speaker {sysMb} MB{warning} · {_meetings.SystemAudioStatus}";
+            StatusText.Text = $"Recording… {elapsed:hh\\:mm\\:ss} · mic {micMb} MB · speaker {sysMb} MB{warning} · {_meetings.SystemAudioStatus} · {_meetings.AutoStopStatus}";
+            DeviceWarningText.Text = _meetings.RecordingDeviceWarning;
+            DeviceWarningText.Visibility = string.IsNullOrEmpty(DeviceWarningText.Text) ? Visibility.Collapsed : Visibility.Visible;
         }
 
         private ModelStore.WhisperModel CurrentOrPreferredModel() =>
@@ -155,7 +193,23 @@ namespace Biscotti.Win
 
         private void RefreshList(Meeting? update = null)
         {
-            var meetings = MeetingStore.LoadAll();
+            List<Meeting> meetings;
+            try
+            {
+                meetings = MeetingStore.LoadAll();
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "A meeting audio file could not be opened or migrated.";
+                if (!_audioLoadErrorShown)
+                {
+                    _audioLoadErrorShown = true;
+                    MessageBox.Show(this,
+                        $"A meeting's encrypted audio could not be opened or migrated. No audio was skipped or replaced.\n\n{ex.Message}\n\nAudio keys belong to the original Windows user profile. An administrator password reset can make a DPAPI key unavailable.",
+                        "Meeting audio unavailable", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                return;
+            }
             var selectedId = (MeetingList.SelectedItem as Meeting)?.Id;
             MeetingList.ItemsSource = meetings;
             if (update != null)
@@ -170,6 +224,8 @@ namespace Biscotti.Win
             {
                 try
                 {
+                    RecordButton.IsEnabled = false;
+                    DeviceWarningText.Visibility = Visibility.Collapsed;
                     var selectedApp = AudioAppPicker.SelectedItem as AudioAppChoice;
                     await _meetings.StartRecordingAsync(selectedApp?.ProcessId, selectedApp?.ProcessName);
                     _recording = true;
@@ -185,9 +241,19 @@ namespace Biscotti.Win
                     RecordButton.Background = new SolidColorBrush(Color.FromRgb(0x27, 0x7D, 0x5E));
                     _healthTimer.Start();
                 }
+                catch (AudioDeviceException ex)
+                {
+                    MessageBox.Show(this, ex.Message, "Choose audio devices", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    ShowAudioDevices();
+                }
                 catch (Exception ex)
                 {
                     MessageBox.Show(this, ex.Message, "Could not start recording");
+                }
+                finally
+                {
+                    UpdateDeviceControls();
+                    UpdateModelButtons();
                 }
                 return;
             }
@@ -280,7 +346,37 @@ namespace Biscotti.Win
                 new MeetingWindow(m).ShowDialog();
             RefreshList();
         }
-    }
 
-    internal sealed record AudioAppChoice(int? ProcessId, string? ProcessName, string DisplayName);
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            if (!App.IsExitRequested)
+            {
+                e.Cancel = true;
+                if (_meetings.State == RecordingState.Starting)
+                    StatusText.Text = "Finishing the audio device check. The app will stay in the tray.";
+                Hide();
+                base.OnClosing(e);
+                return;
+            }
+            if (_meetings.State != RecordingState.Idle)
+            {
+                e.Cancel = true;
+                StatusText.Text = "Stop and finish processing the meeting before exiting.";
+            }
+            base.OnClosing(e);
+        }
+
+        protected override async void OnClosed(EventArgs e)
+        {
+            _healthTimer.Stop();
+            DisposeShell();
+            await _meetings.DisposeAsync();
+            base.OnClosed(e);
+        }
+    }
+}
+
+internal sealed record AudioAppChoice(int? ProcessId, string? ProcessName, string DisplayName)
+{
+    public override string ToString() => DisplayName;
 }

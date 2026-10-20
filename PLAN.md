@@ -23,18 +23,20 @@ summarize locally.
 long transcripts, at-rest privacy, hardware changes mid-meeting.
 
 - [ ] #10 Scripted test-meeting fixture for transcript determinism checks
-- [ ] #17 Encrypt meeting data at rest with DPAPI
+- [ ] #17 Encrypt meeting data at rest with DPAPI (decision: [DPAPI meeting text files](docs/specs/dpapi-meeting-data-at-rest.md))
 - [x] #16 Map-reduce chunked summaries so long meetings are not truncated (PR #37)
 - [x] #15 Live incremental transcription while the meeting is running (PR #41; design: [live transcription](docs/specs/live-incremental-transcription.md))
 - [ ] #14 Per-app loopback capture (only the meeting app lands in the transcript; design: [per-app loopback](docs/specs/per-app-loopback-capture.md))
-- [ ] #19 Device picker UI and mid-meeting device-change handling
+- [x] #48 Play encrypted microphone and system audio in the meeting window (PR #52)
+  - Plan: expose the existing authenticated decrypting stream to playback; add independent microphone/system play-stop controls; surface missing, corrupt, or unavailable-key errors; cover stream and failure handling without audio hardware.
+- [x] #19 Device picker UI and mid-meeting device-change handling (PR #49; decision: [audio device selection](docs/specs/audio-device-selection.md))
 
 ## Phase 3: Capture the meeting context around the transcript
 
 **Goal:** reduce friction around meetings and make output immediately useful.
 
-- [ ] #18 Tray icon, global hotkey and toast notifications
-- [ ] #4 Auto-stop recording when the call ends
+- [ ] #18 Tray icon, global hotkey and toast notifications (design: [tray, hotkey, and notifications](docs/specs/tray-hotkey-notifications.md))
+- [ ] #4 Auto-stop recording when the call ends ([spec](docs/specs/recording-auto-stop.md))
 - [ ] #5 Calendar-aware meeting prompts
 - [ ] #6 Custom vocabulary (names, products, jargon) passed to Whisper
 - [ ] #7 Timestamp-linked markdown notes in the meeting window

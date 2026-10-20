@@ -3,6 +3,7 @@ using Biscotti.Core.Audio;
 using Biscotti.Core.Models;
 using Biscotti.Core.Storage;
 using Biscotti.Core.Transcription;
+using System.Security.Cryptography;
 
 namespace Biscotti.Core;
 
@@ -15,18 +16,25 @@ namespace Biscotti.Core;
 /// </summary>
 public sealed class MeetingService : IAsyncDisposable
 {
+    private static readonly TimeSpan AutoStopSilenceTimeout = TimeSpan.FromMinutes(5);
     private readonly DualChannelRecorder _recorder = new();
+    private readonly LoopbackSilenceMonitor _loopbackSilence = new(AutoStopSilenceTimeout);
     private readonly AppSettings _settings;
     private Meeting? _current;
-    private string? _currentDir;
     private LiveTranscriptionWorker? _liveTranscription;
-    private (long mic, long sys) _recordingByteBaseline;
+    private Timer? _autoStopTimer;
+    private int _stopProcessStarted;
 
     public RecordingState State { get; private set; } = RecordingState.Idle;
     public event Action<RecordingState, string>? StateChanged;
     public event Action<Meeting>? CurrentMeetingUpdated;
+    public event Action<string>? AudioWarning;
 
-    public MeetingService(AppSettings settings) { _settings = settings; }
+    public MeetingService(AppSettings settings)
+    {
+        _settings = settings;
+        _recorder.LoopbackSamplesAvailable += OnLoopbackSamplesAvailable;
+    }
 
     private void SetState(RecordingState s, string message)
     {
@@ -39,34 +47,56 @@ public sealed class MeetingService : IAsyncDisposable
     /// <summary>Live per-channel byte counts for the UI's recording-health readout (issue #21).</summary>
     public (long mic, long sys) RecordingStats => _recorder.TotalBytes;
     public string SystemAudioStatus => _recorder.SystemAudioStatus;
+    public string RecordingDeviceWarning => _recorder.DeviceWarning;
+    public string AutoStopStatus => _loopbackSilence.IsArmed
+        ? "Auto-stop armed: recording stops after 5 minutes without output audio."
+        : "Auto-stop inactive until output audio is detected; in-person recording stays manual.";
 
     public async Task StartRecordingAsync(int? targetProcessId = null, string? targetProcessName = null)
     {
-        if (State == RecordingState.Recording) throw new InvalidOperationException("Already recording.");
-        var (meeting, dir) = MeetingStore.CreateNew();
-        meeting.StartedUtc = DateTime.UtcNow;
-        _current = meeting;
-        _currentDir = dir;
-        _recordingByteBaseline = _recorder.TotalBytes;
-        await _recorder.StartAsync(
-            Path.Combine(dir, "mic.wav"),
-            Path.Combine(dir, "sys.wav"),
-            _settings.MicDeviceIndex,
-            _settings.SpeakerDeviceId,
-            targetProcessId,
-            targetProcessName);
-        _liveTranscription = new LiveTranscriptionWorker(
-            Path.Combine(dir, "mic.wav"),
-            Path.Combine(dir, "sys.wav"),
-            () =>
+        if (State != RecordingState.Idle) throw new InvalidOperationException("A meeting is already in progress.");
+        _loopbackSilence.Reset();
+        SetState(RecordingState.Starting, "Checking audio devices…");
+        var previousMeeting = _current;
+        Meeting? pendingMeeting = null;
+        try
+        {
+            await Task.Run(() =>
             {
-                var total = _recorder.TotalBytes;
-                return (total.mic - _recordingByteBaseline.mic, total.sys - _recordingByteBaseline.sys);
-            },
-            _settings.GetResolvedModelPath());
-        _liveTranscription.LinesReady += AppendLiveLines;
-        _liveTranscription.Start();
-        SetState(RecordingState.Recording, $"Recording… {_recorder.SystemAudioStatus}");
+                AudioDevices.Validate(_settings, AudioDevices.Enumerate());
+                var (meeting, dir) = MeetingStore.CreateNew();
+                pendingMeeting = meeting;
+                meeting.StartedUtc = DateTime.UtcNow;
+                _recorder.Start(Path.Combine(dir, "mic.wav"), Path.Combine(dir, "sys.wav"),
+                    _settings.MicDeviceIndex, _settings.SpeakerDeviceId, _settings.MicDeviceName,
+                    targetProcessId, targetProcessName);
+                _liveTranscription = new LiveTranscriptionWorker(
+                    Path.Combine(dir, "mic.wav"), Path.Combine(dir, "sys.wav"),
+                    () => _recorder.TotalBytes, _settings.GetResolvedModelPath());
+            });
+            _current = pendingMeeting;
+            _liveTranscription!.LinesReady += AppendLiveLines;
+            _liveTranscription.WarningReady += warning => AudioWarning?.Invoke(warning);
+            _liveTranscription.Start();
+            SetState(RecordingState.Recording, $"Recording… click Stop when the call ends. {_recorder.SystemAudioStatus}");
+            _autoStopTimer = new Timer(CheckForLoopbackSilence, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        }
+        catch
+        {
+            try
+            {
+                _recorder.Stop();
+                _liveTranscription?.Dispose();
+                _liveTranscription = null;
+                if (pendingMeeting is not null) MeetingStore.Delete(pendingMeeting.Id);
+            }
+            finally
+            {
+                _current = previousMeeting;
+                SetState(RecordingState.Idle, "Recording did not start. Check Audio devices and try again.");
+            }
+            throw;
+        }
     }
 
     private void AppendLiveLines(IReadOnlyList<TranscriptLine> lines)
@@ -79,11 +109,43 @@ public sealed class MeetingService : IAsyncDisposable
 
     public async Task StopAndProcessAsync(CancellationToken ct = default)
     {
+        if (Interlocked.CompareExchange(ref _stopProcessStarted, 1, 0) != 0) return;
         if (State != RecordingState.Recording || _current is null)
+        {
+            Interlocked.Exchange(ref _stopProcessStarted, 0);
             throw new InvalidOperationException("Not recording.");
+        }
 
+        StopAutoStopTimer();
+        try { await ProcessRecordingAsync(ct); }
+        finally
+        {
+            if (State != RecordingState.Idle)
+                SetState(RecordingState.Idle, "Processing stopped. The recorded audio remains saved locally.");
+            Interlocked.Exchange(ref _stopProcessStarted, 0);
+        }
+    }
+
+    private void OnLoopbackSamplesAvailable(byte[] samples, int bytesRecorded, int channels) =>
+        _loopbackSilence.Observe(samples, bytesRecorded, channels, DateTimeOffset.UtcNow);
+
+    private void CheckForLoopbackSilence(object? state)
+    {
+        if (State != RecordingState.Recording || !_loopbackSilence.HasTimedOut(DateTimeOffset.UtcNow)) return;
+        StopAutoStopTimer();
+        _ = Task.Run(async () =>
+        {
+            try { await StopAndProcessAsync(); }
+            catch (Exception ex) { AudioWarning?.Invoke("Auto-stop could not finish processing the meeting. " + ex.Message); }
+        });
+    }
+
+    private void StopAutoStopTimer() => Interlocked.Exchange(ref _autoStopTimer, null)?.Dispose();
+
+    private async Task ProcessRecordingAsync(CancellationToken ct)
+    {
         var (micPath, sysPath) = _recorder.Stop();
-        _current.EndedUtc = DateTime.UtcNow;
+        _current!.EndedUtc = DateTime.UtcNow;
         MeetingStore.Save(_current);
 
         SetState(RecordingState.Transcribing, "Finishing the live transcript…");
@@ -97,6 +159,18 @@ public sealed class MeetingService : IAsyncDisposable
             }
         }
         catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (CryptographicException)
+        {
+            throw;
+        }
+        catch (InvalidDataException)
+        {
+            throw;
+        }
+        catch (IOException)
         {
             throw;
         }
@@ -121,9 +195,9 @@ public sealed class MeetingService : IAsyncDisposable
         {
             // Defensive fallback if live transcription could not be started.
             using var transcriber = new WhisperTranscriber(_settings.GetResolvedModelPath());
-            var micLines = await transcriber.TranscribeWavAsync(micPath, "You", ct);
+            var micLines = await TranscribeSavedAudioAsync(transcriber, micPath, "You", ct);
             var sysLines = File.Exists(sysPath) && new FileInfo(sysPath).Length > 1000
-                ? await transcriber.TranscribeWavAsync(sysPath, "Speaker", ct)
+                ? await TranscribeSavedAudioAsync(transcriber, sysPath, "Speaker", ct)
                 : new List<TranscriptLine>();
             _current.Transcript = TranscriptAssembler.Merge(micLines, sysLines);
         }
@@ -150,8 +224,23 @@ public sealed class MeetingService : IAsyncDisposable
         CurrentMeetingUpdated?.Invoke(_current);
     }
 
+    private static async Task<List<TranscriptLine>> TranscribeSavedAudioAsync(
+        WhisperTranscriber transcriber, string path, string speaker, CancellationToken ct)
+    {
+        if (!EncryptedAudioFile.IsEncrypted(path))
+            throw new InvalidDataException($"{MeetingAudioMigration.AudioIdentity(path)} does not have an encrypted audio header.");
+        EncryptedAudioReader reader;
+        try
+        {
+            reader = new EncryptedAudioReader(path);
+        }
+        catch (CryptographicException ex) { throw MeetingAudioMigration.KeyAccessFailure(path, ex); }
+        return await transcriber.TranscribeWavAsync(reader.OpenWavStream(), speaker, ct);
+    }
+
     public async ValueTask DisposeAsync()
     {
+        StopAutoStopTimer();
         try { _recorder.Stop(); } catch { }
         try { await (_liveTranscription?.CompleteAsync() ?? Task.CompletedTask); } catch { }
         _liveTranscription?.Dispose();

@@ -13,6 +13,10 @@ Records your meetings and turns them into speaker-labeled transcripts and AI sum
 
 Nothing leaves your machine. Ollama is optional — without it you still get the transcript.
 
+## Tray controls
+
+Biscotti Win stays available from the notification area. Closing the main window hides it in the tray; use the tray menu's **Exit** command to quit. The icon reflects whether the app is idle, recording, or processing. **Ctrl+Alt+R** starts or stops recording by default; change the shortcut from **Settings** in the tray menu. Windows controls whether the summary-ready notification appears during Focus Assist / Do not disturb.
+
 ## Build
 
 ```powershell
@@ -34,6 +38,15 @@ Everything is stored under `%LOCALAPPDATA%\BiscottiWin`:
 - `Meetings\<guid>\meeting.md` — human-readable copy
 - `Meetings\<guid>\mic.wav` / `sys.wav` — full audio, yours to delete
 - `Models\` — Whisper GGML model
+
+Meeting files are currently stored as plaintext. The accepted design for issue
+#17 protects `meeting.json` and `meeting.md` with Windows DPAPI for the current
+user in the release that implements it; existing meetings are migrated without
+deleting their source files until each protected replacement is verified. WAV
+audio remains plaintext in that first phase. DPAPI CurrentUser does not protect
+data from software already running as your Windows user. See the
+[DPAPI storage decision](docs/specs/dpapi-meeting-data-at-rest.md) for migration,
+profile roaming, password-reset behavior, and the follow-up WAV design.
 
 ## Roadmap (from Biscotti feature parity)
 
