@@ -276,6 +276,9 @@ public class CrashSafetyTests
             File.WriteAllBytes(jsonPath, stored);
 
             var error = Assert.Throws<MeetingTextStorageException>(() => MeetingStore.LoadMetadataOnly());
+            Assert.Throws<MeetingTextStorageException>(() => new MeetingQueryService().SearchMeetings("Protected"));
+            Assert.Throws<MeetingTextStorageException>(() => Biscotti.Core.MeetingHistorySearch.Search(
+                MeetingStore.LoadAll().Select(Biscotti.Core.MeetingSearchDocument.FromMeeting), "Protected"));
 
             Assert.Contains("unprotect", error.Message);
             Assert.Equal(stored, File.ReadAllBytes(jsonPath));

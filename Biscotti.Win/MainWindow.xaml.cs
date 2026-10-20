@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using System.Diagnostics;
 using Biscotti.Core;
@@ -84,22 +84,22 @@ namespace Biscotti.Win
             await LoadInitialMeetingsAsync();
         }
 
-        private async Task LoadInitialMeetingsAsync()
+        private async Task LoadInitialMeetingsAsync(Guid? preferredId = null)
         {
+            var version = ++_historyLoadVersion;
+            var selectedId = preferredId ?? SelectedHistoryMeeting?.Id;
             try
             {
                 // Legacy audio migration can read and verify large WAV files. Keep it
                 // off the startup path so the main window and tray appear immediately.
                 var meetings = await MeetingStore.LoadAllAsync();
-                var selectedId = (MeetingList.SelectedItem as Meeting)?.Id;
-                MeetingList.ItemsSource = meetings;
-                UpdateHistoryStatus(meetings.Count);
-                if (selectedId != Guid.Empty)
-                    MeetingList.SelectedItem = meetings.FirstOrDefault(m => m.Id == selectedId);
+                if (version != _historyLoadVersion) return;
+                SetHistory(meetings, selectedId);
             }
             catch (Exception ex)
             {
-                HistoryStatus.Text = "Saved meetings could not be loaded. Check the message below and reopen Biscotti to retry.";
+                if (version != _historyLoadVersion) return;
+                ShowHistoryFailure();
                 HistoryStatus.Visibility = Visibility.Visible;
                 StatusText.Text = "Protected meeting data or audio could not be opened or migrated.";
                 if (!_meetingLoadErrorShown)
@@ -339,42 +339,8 @@ namespace Biscotti.Win
             RecordButton.SetResourceReference(BorderBrushProperty, recording ? "DangerBrush" : "AccentBrush");
         }
 
-        private void UpdateHistoryStatus(int count)
-        {
-            HistoryStatus.Text = count == 0 ? "No meetings yet. Record your first meeting to see its transcript, summary and notes here."
-                : "Select a meeting and press Enter or choose Open selected meeting.";
-            HistoryStatus.Visibility = Visibility.Visible;
-        }
-
-        private void RefreshList(Meeting? update = null)
-        {
-            List<Meeting> meetings;
-            try
-            {
-                meetings = MeetingStore.LoadAll();
-            }
-            catch (Exception ex)
-            {
-                HistoryStatus.Text = "Saved meetings could not be loaded. Reopen Biscotti after checking the storage error.";
-                HistoryStatus.Visibility = Visibility.Visible;
-                StatusText.Text = "Protected meeting data or audio could not be opened or migrated.";
-                if (!_meetingLoadErrorShown)
-                {
-                    _meetingLoadErrorShown = true;
-                    MessageBox.Show(this,
-                        $"A meeting's protected data or audio could not be opened or migrated. Loading stopped rather than silently omitting that data.\n\n{ex.Message}\n\nProtected data belongs to the Windows profile that created it. After signing into that profile, close and reopen Biscotti to retry. An administrator password reset can make DPAPI data unavailable.",
-                        "Meeting data unavailable", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-                return;
-            }
-            var selectedId = (MeetingList.SelectedItem as Meeting)?.Id;
-            MeetingList.ItemsSource = meetings;
-            UpdateHistoryStatus(meetings.Count);
-            if (update != null)
-                MeetingList.SelectedItem = meetings.FirstOrDefault(m => m.Id == update.Id) ?? meetings.FirstOrDefault();
-            else if (selectedId != Guid.Empty)
-                MeetingList.SelectedItem = meetings.FirstOrDefault(m => m.Id == selectedId);
-        }
+        private async void RefreshList(Meeting? update = null) =>
+            await LoadInitialMeetingsAsync(update?.Id);
 
         private async void RecordButton_Click(object sender, RoutedEventArgs e)
         {
@@ -563,7 +529,7 @@ namespace Biscotti.Win
 
         private void MeetingList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            OpenMeetingButton.IsEnabled = MeetingList.SelectedItem is Meeting;
+            OpenMeetingButton.IsEnabled = SelectedHistoryMeeting is Meeting;
         }
 
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -577,14 +543,14 @@ namespace Biscotti.Win
 
         private void MeetingList_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
         {
-            if (e.Key != System.Windows.Input.Key.Enter || MeetingList.SelectedItem is not Meeting) return;
+            if (e.Key != System.Windows.Input.Key.Enter || SelectedHistoryMeeting is not Meeting) return;
             e.Handled = true;
             OpenSelectedMeeting();
         }
 
         private void OpenSelectedMeeting()
         {
-            if (MeetingList.SelectedItem is not Meeting meeting) return;
+            if (SelectedHistoryMeeting is not Meeting meeting) return;
             new MeetingWindow(meeting, designPreview: _designPreview) { Owner = this }.ShowDialog();
             if (!_designPreview) RefreshList();
         }
@@ -618,6 +584,7 @@ namespace Biscotti.Win
         {
             _healthTimer.Stop();
             _calendarTimer.Stop();
+            _historySearchCancellation?.Cancel();
             _modelDownload?.Cancel();
             DisposeShell();
             await _meetings.DisposeAsync();

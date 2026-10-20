@@ -1,8 +1,11 @@
 using System;
 using System.Runtime.ExceptionServices;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
+using Biscotti.Core;
 using Biscotti.Win;
 using Xunit;
 
@@ -21,6 +24,7 @@ public sealed class MeetingFlowTests
             try
             {
                 var app = new System.Windows.Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
                 app.Resources.MergedDictionaries.Add(new ResourceDictionary
                 {
                     Source = new Uri("/Biscotti.Win;component/Theme.xaml", UriKind.Relative),
@@ -34,14 +38,44 @@ public sealed class MeetingFlowTests
                 Assert.Same(regularPaper, app.Resources["PaperBrush"]);
                 var main = new MainWindow(designPreview: true);
                 main.ConfigureDesignPreview("setup");
+                Await(main.ApplyHistorySearchAsync(debounce: false));
                 Assert.False(((Button)main.FindName("RecordButton")).IsEnabled);
                 Assert.Equal(Visibility.Visible, ((Button)main.FindName("ModelButton")).Visibility);
                 Assert.Contains("No meetings yet", ((TextBlock)main.FindName("HistoryStatus")).Text);
                 main.ConfigureDesignPreview("history");
+                Await(main.ApplyHistorySearchAsync(DesignPreview.CreateMeeting().Id, debounce: false));
                 Assert.True(((Button)main.FindName("RecordButton")).IsEnabled);
                 Assert.Equal(Visibility.Collapsed, ((Button)main.FindName("ModelButton")).Visibility);
                 Assert.True(((Button)main.FindName("OpenMeetingButton")).IsEnabled);
+                var search = (TextBox)main.FindName("SearchBox");
+                var list = (ListBox)main.FindName("MeetingList");
+                search.Text = "keyboard navigation";
+                Await(main.ApplyHistorySearchAsync(debounce: false));
+                Assert.Contains("Note:", Assert.IsType<MeetingHistoryResult>(Assert.Single(list.Items)).Snippet);
+                Assert.Null(list.Items.Groups); // relevance order has no date groups
+                search.Text = "missing phrase";
+                var superseded = main.ApplyHistorySearchAsync();
+                search.Text = "atlas";
+                Await(main.ApplyHistorySearchAsync(debounce: false));
+                Await(superseded);
+                Assert.Single(list.Items);
+                search.Text = "missing phrase";
+                Await(main.ApplyHistorySearchAsync(debounce: false));
+                Assert.Empty(list.Items);
+                Assert.Contains("No matching", ((TextBlock)main.FindName("HistoryStatus")).Text);
+                ((Button)main.FindName("ClearSearchButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Await(main.ApplyHistorySearchAsync(debounce: false));
+                Assert.Equal("", search.Text);
+                Assert.Single(list.Items);
+                Assert.Single(list.Items.Groups!);
+                main.ConfigureDesignPreview("failure");
+                search.Text = "atlas";
+                Await(main.ApplyHistorySearchAsync(debounce: false));
+                Assert.Empty(list.Items);
+                Assert.Contains("Protected data", ((TextBlock)main.FindName("HistoryStatus")).Text);
+                Assert.False(((Button)main.FindName("OpenMeetingButton")).IsEnabled);
                 main.ConfigureDesignPreview("processing");
+                Await(main.ApplyHistorySearchAsync(debounce: false));
                 Assert.False(((Button)main.FindName("RecordButton")).IsEnabled);
                 Assert.Equal(Visibility.Visible, ((ProgressBar)main.FindName("ProcessingProgress")).Visibility);
                 var devices = new AudioDevicesWindow(new Biscotti.Core.AppSettings(), () => true, designPreview: true);
@@ -121,5 +155,19 @@ public sealed class MeetingFlowTests
         thread.Start();
         Assert.True(thread.Join(TimeSpan.FromSeconds(30)), "WPF state checks did not finish.");
         if (failure is not null) ExceptionDispatchInfo.Capture(failure).Throw();
+    }
+
+    private static void Await(Task task)
+    {
+        var frame = new DispatcherFrame();
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        var timeout = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        timeout.Tick += (_, _) => frame.Continue = false;
+        timeout.Start();
+        task.ContinueWith(_ => dispatcher.BeginInvoke(new Action(() => frame.Continue = false)));
+        if (!task.IsCompleted) Dispatcher.PushFrame(frame);
+        timeout.Stop();
+        Assert.True(task.IsCompleted, "History search did not finish.");
+        task.GetAwaiter().GetResult();
     }
 }
