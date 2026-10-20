@@ -86,6 +86,53 @@ test and synthetic preview; see the review/evidence index for final validation.
 - #89 Mac runtime visual validation and Windows dark/appearance polish (P3).
 - #90 Microphone echo-control evaluation (P2).
 
+## Active work: guided local model setup and AI settings (#80)
+
+**Status:** Implemented and verified locally; PR delivery in progress.
+Decision: [guided local model setup](docs/specs/local-model-setup.md).
+Evidence: [model setup verification](docs/model-setup-verification.md).
+On 2026-10-20 the user removed the
+separate plan-approval requirement and directed work to proceed within the
+existing authorization.
+Claimed by d1dac0 on 2026-10-20 in branch `issue-80-model-setup`.
+Baseline at `e45376b`: `tools/build.ps1` and `tools/check.ps1` passed;
+98 core tests and 1 Windows flow test passed, none skipped. The initial
+build reports existing NAudio obsolete-API and test read warnings.
+
+1. Record the setup/settings decision in `docs/specs/` before implementing.
+   Add testable readiness checks that distinguish missing Whisper files,
+   incomplete downloads, an unavailable local Ollama server, and an absent
+   selected summary model. Show model sizes and available local disk space;
+   check space before downloads. Keep Ollama inference on the existing local
+   endpoint and keep model downloads explicit.
+2. Extend the existing setup card and Settings window using the current WPF
+   styles. Expose the two supported Whisper models, CPU/GPU preference with
+   existing fallback, vocabulary, and a list of locally installed Ollama
+   models with sizes. Show readiness, download progress, cancel/retry, and
+   clear offline-after-download guidance. Provide actionable local Ollama
+   installation/model-download instructions when it is unavailable. Explain
+   Windows microphone permission failures and let the user open permission
+   settings without changing permissions automatically. Keep capture available
+   when only summaries are unavailable.
+3. Add validated summary preferences (brief/standard/detailed and optional
+   custom guidance, bounded to 4,000 characters) to local settings. Apply
+   them to single-pass and chunked summaries while retaining the section
+   contract used to parse summaries, titles, actions, and participants. Save
+   changes as a validated unit; Cancel discards edits. Apply model/runtime
+   changes to the next meeting, avoiding changes during active processing.
+4. Add hardware-free regressions for missing server/model, insufficient disk,
+   corrupt/incomplete download, cancellation/retry, CPU fallback, settings
+   validation, and summary guidance in single/chunk/merge passes. Run both
+   required scripts and inspect the native setup/settings flow with synthetic
+   data. Launch with `dotnet run --project Biscotti.Win` for the human
+   walkthrough and report the actual generated executable path. Deliver one
+   labelled PR with `Fixes #80`, then merge only after green CI.
+
+Final local verification: build/check passed with 113 core tests and the
+expanded Windows flow test (114 total, none skipped). The native synthetic
+setup/settings walkthrough passed. Additional independent review, extended
+performance checks and real multi-GB downloads were not run.
+
 ## On-request audits
 
 Standing `type:audit` issues wait in the tracker for the human's explicit
@@ -126,3 +173,4 @@ obsolete and inexact test-read warnings remain outside this issue.
 
 #81 verification complete: 108 tests passed and native synthetic keyboard
 walkthrough passed. See [verification](docs/meeting-history-search-verification.md).
+Integration verification after #80: build/check passed, 123 tests.

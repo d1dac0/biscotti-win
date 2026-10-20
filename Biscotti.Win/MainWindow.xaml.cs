@@ -15,6 +15,7 @@ namespace Biscotti.Win
         private readonly MeetingService _meetings;
         private readonly AppSettings _settings;
         private readonly bool _designPreview;
+        private CancellationTokenSource? _modelDownload;
         private bool _recording;
         private Stopwatch? _recordingStopwatch;
         private bool _meetingLoadErrorShown;
@@ -77,6 +78,7 @@ namespace Biscotti.Win
             RefreshAudioApps();
             UpdateModelButtons();
             MaybeFirstRunGpuPrompt();
+            await RefreshSummaryReadinessAsync();
             await RefreshCalendarMeetingsAsync();
             _calendarTimer.Start();
             await LoadInitialMeetingsAsync();
@@ -411,7 +413,7 @@ namespace Biscotti.Win
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "Could not start recording");
+                MessageBox.Show(this, ex.Message + "\n\nIf microphone access is denied, open Settings > Microphone access for Windows permission guidance, then check Audio devices.", "Could not start recording");
             }
             finally
             {
@@ -452,6 +454,10 @@ namespace Biscotti.Win
         private async void ModelButton_Click(object sender, RoutedEventArgs e)
         {
             if (_designPreview) { StatusText.Text = "Preview only. No models are downloaded."; return; }
+            if (_modelDownload is not null) return;
+            using var cancellation = new CancellationTokenSource();
+            _modelDownload = cancellation;
+            CancelModelButton.Visibility = Visibility.Visible;
             var model = CurrentOrPreferredModel();
             ModelProgress.Visibility = Visibility.Visible;
             ModelProgress.Value = 0;
@@ -464,19 +470,32 @@ namespace Biscotti.Win
                     ModelProgress.Value = p.pct;
                     StatusText.Text = p.phase;
                 });
-                await ModelStore.EnsureDownloadedAsync(model, progress);
+                await ModelStore.EnsureDownloadedAsync(model, progress, cancellation.Token);
                 StatusText.Text = $"{model.DisplayName} ready.";
                 RefreshList();
             }
+            catch (OperationCanceledException) { StatusText.Text = "Download cancelled. Press Download Whisper model to retry."; }
             catch (Exception ex)
             {
                 MessageBox.Show(this, ex.Message, "Model download failed");
             }
             finally
             {
+                _modelDownload = null;
+                CancelModelButton.Visibility = Visibility.Collapsed;
                 ModelProgress.Visibility = Visibility.Collapsed;
                 UpdateModelButtons();
             }
+        }
+
+        private void CancelModel_Click(object sender, RoutedEventArgs e) => _modelDownload?.Cancel();
+
+        private async Task RefreshSummaryReadinessAsync()
+        {
+            if (_designPreview) return;
+            SummaryReadinessText.Text = "Checking local summary model…";
+            var readiness = await Biscotti.Core.Ai.OllamaModels.CheckAsync();
+            SummaryReadinessText.Text = readiness.Describe(_settings.OllamaModel);
         }
 
         private void RefreshAudioApps_Click(object sender, RoutedEventArgs e) => RefreshAudioApps();
@@ -516,7 +535,7 @@ namespace Biscotti.Win
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
             if (_designPreview)
-                new SettingsWindow("Ctrl+Alt+R", "Atlas, Biscotti", (_, _) => null) { Owner = this }.ShowDialog();
+                new SettingsWindow(new AppSettings { LocalVocabulary = "Atlas, Biscotti" }, _ => null, designPreview: true) { Owner = this }.ShowDialog();
             else OpenSettingsFromShell();
         }
 
@@ -566,6 +585,7 @@ namespace Biscotti.Win
             _healthTimer.Stop();
             _calendarTimer.Stop();
             _historySearchCancellation?.Cancel();
+            _modelDownload?.Cancel();
             DisposeShell();
             await _meetings.DisposeAsync();
         }

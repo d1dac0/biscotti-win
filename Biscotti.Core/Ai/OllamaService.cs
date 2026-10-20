@@ -12,12 +12,20 @@ namespace Biscotti.Core.Ai;
 /// </summary>
 public sealed class OllamaService : IDisposable
 {
-    private readonly HttpClient _http = new() { BaseAddress = new Uri("http://localhost:11434"), Timeout = TimeSpan.FromMinutes(10) };
+    private readonly HttpClient _http;
     private readonly string _model;
+    private readonly SummaryPreferences _preferences;
 
-    public OllamaService(string? model = null)
+    public OllamaService(string? model = null, SummaryPreferences? preferences = null)
+        : this(model, preferences, new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false })
+            { BaseAddress = new Uri("http://localhost:11434"), Timeout = TimeSpan.FromMinutes(10) }) { }
+
+    internal OllamaService(string? model, SummaryPreferences? preferences, HttpClient http)
     {
+        _http = http;
         _model = string.IsNullOrWhiteSpace(model) ? "gemma3:4b" : model;
+        _preferences = preferences ?? new();
+        if (_preferences.Validate() is string error) throw new ArgumentException(error, nameof(preferences));
     }
 
     public sealed record OllamaResponse([property: JsonPropertyName("response")] string? Response);
@@ -41,23 +49,27 @@ public sealed class OllamaService : IDisposable
     internal Func<CancellationToken, Task<bool>>? AvailabilityProbe;
 
     private Task<string> Generate(string prompt, CancellationToken ct) =>
-        GenerateProbe != null ? GenerateProbe(prompt, ct) : GenerateAsync(prompt, ct);
+        GenerateProbe != null ? GenerateProbe(_preferences.Apply(prompt), ct) : GenerateAsync(_preferences.Apply(prompt), ct);
 
     private Task<bool> CheckAvailable(CancellationToken ct) =>
         AvailabilityProbe != null ? AvailabilityProbe(ct) : IsAvailableAsync(ct);
 
     public async Task<bool> IsAvailableAsync(CancellationToken ct = default)
     {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(5));
         try
         {
-            using var resp = await _http.GetAsync("/api/tags", ct);
-            return resp.IsSuccessStatusCode;
+            return (await OllamaModels.CheckAsync(_http, timeout.Token)).HasModel(_model);
         }
-        catch { return false; }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (OperationCanceledException) { return false; }
     }
 
     public async Task<string> GenerateAsync(string prompt, CancellationToken ct = default)
     {
+        if (!await IsAvailableAsync(ct))
+            throw new InvalidOperationException("The selected summary model is not available locally. Open Settings and check Ollama.");
         using var resp = await _http.PostAsJsonAsync("/api/generate", new
         {
             model = _model,
@@ -81,6 +93,7 @@ public sealed class OllamaService : IDisposable
         if (GenerateProbe is null && !await CheckAvailable(ct)) return null;
 
         var chunks = ChunkLines(transcript);
+        if (chunks.Count == 0) return null;
         if (chunks.Count == 1)
             return await Generate(BuildSinglePassPrompt(FormatTranscript(chunks[0]), knownAttendees), ct);
 

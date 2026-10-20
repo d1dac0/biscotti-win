@@ -245,7 +245,8 @@ public sealed class MeetingService : IAsyncDisposable
         MeetingStore.Save(_current);
 
         SetState(RecordingState.Summarizing, "Writing summary with local AI (Ollama)…");
-        using var ollama = new OllamaService(_settings.OllamaModel);
+        using var ollama = new OllamaService(_settings.OllamaModel,
+            new SummaryPreferences(_settings.SummaryLength, _settings.SummaryGuidance));
         var chunkProgress = new Progress<(int chunk, int total)>(p =>
             SetState(RecordingState.Summarizing,
                 $"Writing summary with local AI (part {p.chunk} of {p.total})…"));
@@ -267,7 +268,9 @@ public sealed class MeetingService : IAsyncDisposable
 
         SpeakerIntroductionResolver.Apply(_current.Transcript);
 
-        SetState(RecordingState.Idle, "Done — transcript and summary saved locally.");
+        SetState(RecordingState.Idle, string.IsNullOrWhiteSpace(raw)
+            ? "Transcript saved locally. Summary unavailable — check Ollama and the local model in Settings."
+            : "Done — transcript and summary saved locally.");
         MeetingStore.Save(_current);
         CurrentMeetingUpdated?.Invoke(_current);
     }

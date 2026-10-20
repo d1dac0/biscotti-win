@@ -22,3 +22,9 @@
 - Extended real-library scale testing and a separate external review were not
   run. Search scans in-memory text, so very large libraries may need a later
   encrypted index design; no disk index or editable tag workflow was added.
+
+Integration with #80 / PR #92: merged origin/main (b98486c) into the issue
+branch. The sole conflict was shutdown cleanup; retained cancellation of both
+history search and model download. Build/check passed again with 123 tests
+(122 Core/MCP plus 1 combined WPF flow). Re-launched the integrated synthetic
+preview and inspected Ctrl+F search panel before pushing the merge.
