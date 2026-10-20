@@ -510,13 +510,12 @@ namespace Biscotti.Win
             base.OnClosing(e);
         }
 
-        protected override async void OnClosed(EventArgs e)
+        internal async Task DisposeForShutdownAsync()
         {
             _healthTimer.Stop();
             _calendarTimer.Stop();
             DisposeShell();
             await _meetings.DisposeAsync();
-            base.OnClosed(e);
         }
     }
 }
