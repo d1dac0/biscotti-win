@@ -7,6 +7,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -25,9 +26,14 @@
                     Background="#EEE" BorderThickness="0"/>
             <ProgressBar x:Name="ModelProgress" Width="180" Height="14" Margin="12,0,0,0"
                          Minimum="0" Maximum="100" Visibility="Collapsed"/>
+            <Button x:Name="AudioDevicesButton" Height="44" Margin="12,0,0,0" Padding="16,0"
+                    Content="Audio devices" Click="AudioDevicesButton_Click"/>
         </StackPanel>
 
-        <ListBox x:Name="MeetingList" Grid.Row="2" HorizontalContentAlignment="Stretch"
+        <TextBlock x:Name="DeviceWarningText" Grid.Row="2" Foreground="#9B2C20" TextWrapping="Wrap"
+                   Margin="0,0,0,12" Visibility="Collapsed" AutomationProperties.LiveSetting="Polite"/>
+
+        <ListBox x:Name="MeetingList" Grid.Row="3" HorizontalContentAlignment="Stretch"
                  Background="Transparent" BorderThickness="0"
                  MouseDoubleClick="MeetingList_DoubleClick"
                  SelectionChanged="MeetingList_SelectionChanged">
