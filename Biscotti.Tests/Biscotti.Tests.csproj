@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Biscotti.Core\Biscotti.Core.csproj" />
+    <ProjectReference Include="..\Biscotti.Mcp\Biscotti.Mcp.csproj" />
   </ItemGroup>
 
 </Project>

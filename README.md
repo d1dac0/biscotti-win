@@ -48,6 +48,14 @@ data from software already running as your Windows user. See the
 [DPAPI storage decision](docs/specs/dpapi-meeting-data-at-rest.md) for migration,
 profile roaming, password-reset behavior, and the follow-up WAV design.
 
+## Chat with local meetings
+
+Biscotti includes a read-only MCP server that lets compatible local MCP clients
+search saved meetings, read meeting details, and page through timestamped,
+speaker-labeled transcripts. The server reads the same local `meeting.json`
+files as the app and does not open audio files or contact remote services.
+See [the MCP setup guide](docs/mcp-server.md) for build and client configuration.
+
 ## Roadmap (from Biscotti feature parity)
 
 - Windows calendar awareness (offer to record before a meeting starts)
@@ -55,4 +63,3 @@ profile roaming, password-reset behavior, and the follow-up WAV design.
 - Auto-stop when the call ends
 - Custom vocabulary
 - Markdown-notes linked to the moment they happened
-- MCP server to chat with your meeting notes
