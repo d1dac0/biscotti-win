@@ -33,8 +33,18 @@ public sealed class OllamaService : IDisposable
 
     internal Func<string, CancellationToken, Task<string>>? GenerateProbe; // test seam (issue #16)
 
+    /// <summary>
+    /// Test seam (issue #40) for the availability gate. Only consulted when no
+    /// GenerateProbe is installed: a probe replaces every network interaction,
+    /// so it must not depend on a live Ollama either.
+    /// </summary>
+    internal Func<CancellationToken, Task<bool>>? AvailabilityProbe;
+
     private Task<string> Generate(string prompt, CancellationToken ct) =>
         GenerateProbe != null ? GenerateProbe(prompt, ct) : GenerateAsync(prompt, ct);
+
+    private Task<bool> CheckAvailable(CancellationToken ct) =>
+        AvailabilityProbe != null ? AvailabilityProbe(ct) : IsAvailableAsync(ct);
 
     public async Task<bool> IsAvailableAsync(CancellationToken ct = default)
     {
@@ -64,7 +74,10 @@ public sealed class OllamaService : IDisposable
         IProgress<(int chunk, int total)>? chunkProgress = null,
         CancellationToken ct = default)
     {
-        if (!await IsAvailableAsync(ct)) return null;
+        // Issue #40: a GenerateProbe replaces every network interaction, so
+        // the availability gate must not block probe-backed (test) runs when
+        // no Ollama server is listening — CI has none.
+        if (GenerateProbe is null && !await CheckAvailable(ct)) return null;
 
         var chunks = ChunkLines(transcript);
         if (chunks.Count == 1)
