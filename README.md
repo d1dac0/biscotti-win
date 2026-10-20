@@ -35,6 +35,15 @@ Everything is stored under `%LOCALAPPDATA%\BiscottiWin`:
 - `Meetings\<guid>\mic.wav` / `sys.wav` — full audio, yours to delete
 - `Models\` — Whisper GGML model
 
+Meeting files are currently stored as plaintext. The accepted design for issue
+#17 protects `meeting.json` and `meeting.md` with Windows DPAPI for the current
+user in the release that implements it; existing meetings are migrated without
+deleting their source files until each protected replacement is verified. WAV
+audio remains plaintext in that first phase. DPAPI CurrentUser does not protect
+data from software already running as your Windows user. See the
+[DPAPI storage decision](docs/specs/dpapi-meeting-data-at-rest.md) for migration,
+profile roaming, password-reset behavior, and the follow-up WAV design.
+
 ## Roadmap (from Biscotti feature parity)
 
 - Windows calendar awareness (offer to record before a meeting starts)
