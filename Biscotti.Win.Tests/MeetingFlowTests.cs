@@ -124,6 +124,7 @@ public sealed class MeetingFlowTests
                 review.Dispatcher.Invoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() => { }));
                 Assert.False(((Button)review.FindName("SaveButton")).IsEnabled);
                 Assert.False(((TabItem)review.FindName("AudioTab")).IsEnabled);
+                Assert.False(((TabItem)review.FindName("SpeakersTab")).IsEnabled);
                 Assert.Contains("Listening", ((TextBlock)review.FindName("TranscriptEmptyText")).Text);
                 Assert.Equal(Visibility.Collapsed, ((GroupBox)review.FindName("ActionItemsGroup")).Visibility);
                 review.StopAddingTimestampedNotes();
@@ -139,6 +140,7 @@ public sealed class MeetingFlowTests
                 review.Dispatcher.Invoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() => { }));
                 Assert.True(((Button)review.FindName("SaveButton")).IsEnabled);
                 Assert.True(((TabItem)review.FindName("AudioTab")).IsEnabled);
+                Assert.True(((TabItem)review.FindName("SpeakersTab")).IsEnabled);
                 Assert.Equal(meeting.Title, ((TextBox)review.FindName("TitleBox")).Text);
                 Assert.Equal(meeting.Summary, ((TextBox)review.FindName("SummaryBox")).Text);
                 Assert.Equal(Visibility.Collapsed, ((TextBlock)review.FindName("TranscriptEmptyText")).Visibility);
@@ -146,6 +148,37 @@ public sealed class MeetingFlowTests
                 Assert.Single(((ItemsControl)review.FindName("ActionItemsList")).Items);
                 Assert.Same(review.FindName("SummaryTab"), ((TabControl)review.FindName("ReviewTabs")).SelectedItem);
                 review.Close();
+
+                var speakersMeeting = DesignPreview.CreateMeeting();
+                speakersMeeting.Transcript[0].SpeakerKey = "system:0";
+                speakersMeeting.Transcript[1].SpeakerKey = "system:1";
+                speakersMeeting.Transcript[2].SpeakerKey = "system:0";
+                var speakers = new MeetingWindow(speakersMeeting, designPreview: true);
+                speakers.Show();
+                ((TabControl)speakers.FindName("ReviewTabs")).SelectedItem = speakers.FindName("SpeakersTab");
+                Assert.Equal(2, ((ComboBox)speakers.FindName("SpeakerGroupBox")).Items.Count);
+                Assert.False(((CheckBox)speakers.FindName("SpeakerMemoryEnabled")).IsChecked);
+                Assert.False(((Button)speakers.FindName("AnalyzeVoiceButton")).IsEnabled);
+                ((TextBox)speakers.FindName("SpeakerNameBox")).Text = "Corrected Alex";
+                ((Button)speakers.FindName("CorrectSpeakerButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal("Corrected Alex", speakersMeeting.Transcript[0].Speaker);
+                Assert.Equal("Corrected Alex", speakersMeeting.Transcript[2].Speaker);
+                Assert.Equal("Jordan", speakersMeeting.Transcript[1].Speaker);
+                var optIn = (CheckBox)speakers.FindName("SpeakerMemoryEnabled");
+                optIn.IsChecked = true;
+                optIn.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent));
+                Assert.True(((Button)speakers.FindName("AnalyzeVoiceButton")).IsEnabled);
+                Await(speakers.AnalyzeSelectedVoiceAsync());
+                Assert.Contains("No confident suggestion", ((TextBlock)speakers.FindName("SpeakerSuggestionText")).Text);
+                Assert.False(((Button)speakers.FindName("UseSuggestionButton")).IsEnabled);
+                Assert.True(((Button)speakers.FindName("RememberVoiceButton")).IsEnabled);
+                ((Button)speakers.FindName("RememberVoiceButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Contains("Preview only", ((TextBlock)speakers.FindName("SpeakerStatus")).Text);
+                ((Button)speakers.FindName("ForgetAllButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.False(optIn.IsChecked);
+                Assert.False(((Button)speakers.FindName("RememberVoiceButton")).IsEnabled);
+                Assert.Equal("Corrected Alex", speakersMeeting.Transcript[0].Speaker);
+                speakers.Close();
                 main.Close();
                 app.Shutdown();
             }

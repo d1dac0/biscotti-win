@@ -64,7 +64,10 @@ public static class SpeakerEmbeddingClusterer
 
         for (var index = 0; index < lines.Count; index++)
             if (clusterOrder.TryGetValue(clusterIds[index], out var label))
+            {
                 lines[index].Speaker = label;
+                lines[index].SpeakerKey = $"system:{clusterIds[index]}";
+            }
     }
 
     public static float CosineSimilarity(ReadOnlySpan<float> left, ReadOnlySpan<float> right)
