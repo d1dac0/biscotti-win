@@ -4,7 +4,7 @@
 
 ## Decision
 
-The release that implements issue #17 will protect each meeting's `meeting.json` and `meeting.md` with Windows DPAPI using `ProtectedData.Protect` / `Unprotect` and `DataProtectionScope.CurrentUser`. The files keep their existing names. Each protected file starts with the fixed ASCII envelope marker `BISCOTTI-DPAPI:1\n`, followed by the DPAPI blob; bytes after the marker are never interpreted as plaintext unless `Unprotect` succeeds. A file without the marker is a legacy plaintext file and is eligible for migration. `mic.wav` and `sys.wav` remain plaintext in this phase; the WAV protection preview below is follow-up work, not a claim that current recordings are encrypted.
+The release that implements issue #17 will protect each meeting's `meeting.json` and `meeting.md` with Windows DPAPI using `ProtectedData.Protect` / `Unprotect` and `DataProtectionScope.CurrentUser`. The files keep their existing names. Each protected file starts with the ASCII bytes `BISCOTTI-DPAPI:1` followed by one LF byte (`0x0A`), then the DPAPI blob. Bytes after the marker are never interpreted as plaintext unless `Unprotect` succeeds. A file without the marker is a legacy plaintext file and is eligible for migration. `mic.wav` and `sys.wav` remain plaintext in this phase; the WAV protection preview below is follow-up work, not a claim that current recordings are encrypted.
 
 ## File handling and migration
 
