@@ -56,7 +56,10 @@ public partial class MeetingWindow
         Func<Meeting, CancellationToken, Task>? action, string success)
     {
         if (action is null || _processingActionRunning || _isLiveRecording || _isProcessing) return;
+        if (HasUnsavedEdits && !TrySaveEdits()) return;
         _processingActionRunning = true;
+        TitleBox.IsReadOnly = SummaryBox.IsReadOnly = NotesBox.IsReadOnly = true;
+        SaveButton.IsEnabled = DeleteButton.IsEnabled = false;
         RefreshProcessingPanel();
         string? finalMessage = null;
         try
@@ -73,6 +76,11 @@ public partial class MeetingWindow
         finally
         {
             _processingActionRunning = false;
+            TitleBox.Text = _meeting.Title;
+            SummaryBox.Text = _meeting.Summary ?? "";
+            TitleBox.IsReadOnly = SummaryBox.IsReadOnly = NotesBox.IsReadOnly = false;
+            SaveButton.IsEnabled = DeleteButton.IsEnabled = true;
+            CaptureSavedEdits();
             RefreshProcessingPanel();
             if (finalMessage is not null) ProcessingStatusText.Text = finalMessage;
         }

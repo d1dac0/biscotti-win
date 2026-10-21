@@ -210,7 +210,9 @@ public sealed class MeetingFlowTests
                 Assert.False(optIn.IsChecked);
                 Assert.False(((Button)speakers.FindName("RememberVoiceButton")).IsEnabled);
                 Assert.Equal("Corrected Alex", speakersMeeting.Transcript[0].Speaker);
+                Assert.False(speakers.HasUnsavedEdits);
                 speakers.Close();
+                MarkdownNotesChecks.Run();
                 main.Close();
                 app.Shutdown();
             }

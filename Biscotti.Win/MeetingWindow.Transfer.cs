@@ -15,7 +15,7 @@ public partial class MeetingWindow
             "Copy unencrypted text", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
         try
         {
-            Clipboard.SetText(MeetingStore.RenderMarkdown(_meeting));
+            Clipboard.SetText(MeetingStore.RenderMarkdown(CreateEditedMeeting()));
             TransferStatus.Text = "Copied current meeting text as unencrypted Markdown. Audio was not copied.";
         }
         catch (Exception ex) { TransferStatus.Text = $"Could not copy. {ex.Message}"; }
@@ -28,7 +28,7 @@ public partial class MeetingWindow
         if (!TransferDisclosure.ConfirmFile(this)) return;
         var picker = new SaveFileDialog { Title = "Export meeting (unencrypted)", Filter = "Markdown (*.md)|*.md", DefaultExt = ".md", FileName = "Biscotti-meeting.md" };
         if (picker.ShowDialog(this) != true) return;
-        var markdown = MeetingStore.RenderMarkdown(_meeting);
+        var markdown = MeetingStore.RenderMarkdown(CreateEditedMeeting());
         ExportMarkdownButton.IsEnabled = false;
         try
         {

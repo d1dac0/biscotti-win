@@ -30,11 +30,13 @@ namespace Biscotti.Win
             bool designPreview = false,
             Func<Meeting, CancellationToken, Task>? recoverInterruptedMeeting = null,
             Func<Meeting, CancellationToken, Task>? retryTranscription = null,
-            Func<Meeting, CancellationToken, Task>? regenerateSummary = null)
+            Func<Meeting, CancellationToken, Task>? regenerateSummary = null,
+            Action<Meeting>? saveMeeting = null)
         {
             InitializeComponent();
             _meeting = meeting;
             _designPreview = designPreview;
+            _saveMeeting = saveMeeting ?? (designPreview ? _ => { } : MeetingStore.Save);
             _isLiveRecording = isLiveRecording;
             _addTimestampedNote = addTimestampedNote;
             _recordingElapsedSeconds = recordingElapsedSeconds;
@@ -56,10 +58,12 @@ namespace Biscotti.Win
             TransferControls.IsEnabled = !isLiveRecording;
             UpdateSpeakerControls();
             RefreshTimestampedNotes();
+            TimestampedNotesExpander.IsExpanded = isLiveRecording;
             UpdateReviewState();
             RefreshProcessingPanel();
             if (!isLiveRecording && !string.IsNullOrWhiteSpace(meeting.Summary)) ReviewTabs.SelectedItem = SummaryTab;
             Closed += (_, _) => StopPlayback();
+            InitializeEditing();
         }
 
         public void RefreshTranscript()
@@ -86,9 +90,14 @@ namespace Biscotti.Win
 
         private void RefreshTimestampedNotes()
         {
-            var notes = _meeting.TimestampedNotes.OrderBy(note => note.StartSeconds).ToList();
+            var notes = (_isLiveRecording ? _meeting.TimestampedNotes :
+                _noteDrafts ??= _meeting.TimestampedNotes.Select(note => new TimestampedMeetingNote
+                    { StartSeconds = note.StartSeconds, Text = note.Text }).ToList())
+                .OrderBy(note => note.StartSeconds).ToList();
             TimestampedNotesList.ItemsSource = notes;
             TimestampedNotesScroller.Visibility = notes.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+            TimestampedNotesExpander.Visibility = notes.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+            TimestampedNotesExpander.Header = $"Timestamped notes ({notes.Count}) · review or edit";
             NotesGrid.RowDefinitions[1].Height = notes.Count == 0 ? new GridLength(0) : GridLength.Auto;
         }
 
@@ -135,11 +144,13 @@ namespace Biscotti.Win
             AudioTab.IsEnabled = true;
             TransferControls.IsEnabled = true;
             UpdateSpeakerControls();
-            TitleBox.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty)?.UpdateTarget();
-            SummaryBox.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty)?.UpdateTarget();
+            TitleBox.Text = _meeting.Title;
+            SummaryBox.Text = _meeting.Summary ?? "";
+            NotesBox.Text = _meeting.Notes ?? "";
             GetBindingExpression(TitleProperty)?.UpdateTarget();
             ActionItemsList.ItemsSource = _meeting.ActionItems;
             RefreshTranscript();
+            CaptureSavedEdits();
             if (!string.IsNullOrWhiteSpace(_meeting.Summary)) ReviewTabs.SelectedItem = SummaryTab;
         }
 
@@ -262,18 +273,7 @@ namespace Biscotti.Win
 
         private void Save_Click(object sender, RoutedEventArgs e)
         {
-            if (_designPreview) { Close(); return; }
-            try
-            {
-                MeetingStore.Save(_meeting);
-                Close();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(this,
-                    $"The meeting could not be protected and saved. Keep this window open and retry after checking the Windows profile and storage permissions.\n\n{ex.Message}",
-                    "Meeting not saved", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            TrySaveEdits();
         }
 
         private void Delete_Click(object sender, RoutedEventArgs e)
@@ -290,6 +290,7 @@ namespace Biscotti.Win
                 return;
             }
             MeetingStore.Delete(_meeting.Id);
+            _discardEditsOnClose = true;
             Close();
         }
     }
