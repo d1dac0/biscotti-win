@@ -40,10 +40,10 @@ public partial class AudioDevicesWindow : Window
                 : AudioDevices.Enumerate();
             MicrophoneBox.ItemsSource = devices.Microphones;
             OutputBox.ItemsSource = devices.Outputs;
-            MicrophoneBox.SelectedItem = micIndex is null && micName is null
-                ? devices.Microphones.FirstOrDefault()
-                : devices.Microphones.FirstOrDefault(m => m.Index == micIndex && m.Name == micName
-                    && (micEndpointId is null || m.EndpointId == micEndpointId));
+            MicrophoneBox.SelectedItem = AudioDevices.ResolveMicrophone(new AppSettings
+            {
+                MicDeviceIndex = micIndex, MicDeviceName = micName, MicDeviceEndpointId = micEndpointId
+            }, devices) ?? (_designPreview ? devices.Microphones.FirstOrDefault() : null);
             OutputBox.SelectedItem = devices.Outputs.FirstOrDefault(o => o.Id == outputId);
             DeviceMessage.Text = MicrophoneBox.SelectedItem is null || OutputBox.SelectedItem is null
                 ? "A saved device is unavailable. Choose an available device, then save."

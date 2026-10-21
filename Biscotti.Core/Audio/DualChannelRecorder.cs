@@ -46,9 +46,10 @@ public sealed class DualChannelRecorder : IDisposable
         bool allowSystemWideLoopback = false)
     {
         var selection = new AppSettings { MicDeviceIndex = preferredMicDevice,
-            MicDeviceName = preferredMicName, SpeakerDeviceId = preferredSpeakerId };
+            MicDeviceName = preferredMicName, MicDeviceEndpointId = preferredMicEndpointId,
+            SpeakerDeviceId = preferredSpeakerId };
         var devices = AudioDevices.Enumerate();
-        AudioDevices.Validate(selection, devices);
+        AudioDevices.PrepareForRecording(selection, devices);
         ReleaseCapture();
         Interlocked.Exchange(ref _micBytes, 0);
         Interlocked.Exchange(ref _sysBytes, 0);
@@ -64,8 +65,7 @@ public sealed class DualChannelRecorder : IDisposable
         var micId = RandomChannelId();
         var sysId = RandomChannelId();
         while (sysId == micId) sysId = RandomChannelId();
-        var micEndpointId = preferredMicEndpointId ?? devices.Microphones.First(m =>
-            m.Index == preferredMicDevice && m.Name == preferredMicName).EndpointId;
+        var micEndpointId = selection.MicDeviceEndpointId;
         try
         {
             _micWav = new EncryptedAudioWriter(micWavPath, meetingKey, micId);
@@ -73,7 +73,7 @@ public sealed class DualChannelRecorder : IDisposable
             lock (_audioGate) _acceptAudio = true;
             _stopping = false;
             CaptureStartup.Start(
-                () => StartMic(preferredMicDevice!.Value, micEndpointId, preferredSpeakerId,
+                () => StartMic(selection.MicDeviceIndex!.Value, micEndpointId, preferredSpeakerId,
                     osBuild ?? Environment.OSVersion.Version.Build),
                 () => StartLoopback(preferredSpeakerId, targetProcessId, targetProcessName,
                     osBuild ?? Environment.OSVersion.Version.Build, allowSystemWideLoopback),

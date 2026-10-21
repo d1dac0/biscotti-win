@@ -7,7 +7,8 @@ public sealed record OutputDeviceChoice(string? Id, string Name);
 public sealed record AudioDeviceSnapshot(
     IReadOnlyList<WaveInDeviceInfo> Microphones,
     IReadOnlyList<OutputDeviceChoice> Outputs,
-    string? DefaultOutputId);
+    string? DefaultOutputId,
+    WaveInDeviceInfo? DefaultMicrophone = null);
 
 public sealed class AudioDeviceException(string message, Exception? inner = null) : Exception(message, inner);
 
@@ -45,6 +46,14 @@ public static class AudioDevices
         }
         microphones = MicrophoneEndpointMatcher.Attach(microphones, captureEndpoints).ToList();
 
+        WaveInDeviceInfo? defaultMicrophone = null;
+        if (enumerator.HasDefaultAudioEndpoint(DataFlow.Capture, Role.Console))
+        {
+            using var endpoint = enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
+            defaultMicrophone = FindDefaultMicrophone(microphones, endpoint.ID);
+            if (!microphones.Contains(defaultMicrophone)) microphones.Add(defaultMicrophone);
+        }
+
         var outputs = new List<OutputDeviceChoice> { new(null, "Windows default output") };
         var endpoints = enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active);
         foreach (var endpoint in endpoints)
@@ -57,7 +66,30 @@ public static class AudioDevices
             using var endpoint = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Console);
             defaultId = endpoint.ID;
         }
-        return new(microphones, outputs, defaultId);
+        return new(microphones, outputs, defaultId, defaultMicrophone);
+    }
+
+    internal static WaveInDeviceInfo FindDefaultMicrophone(IReadOnlyList<WaveInDeviceInfo> microphones,
+        string endpointId) => microphones.FirstOrDefault(m => m.EndpointId == endpointId)
+            ?? new(-1, "Windows default microphone", endpointId);
+
+    public static WaveInDeviceInfo? ResolveMicrophone(AppSettings settings, AudioDeviceSnapshot devices)
+    {
+        var selected = settings.MicDeviceEndpointId is not null
+            ? devices.Microphones.FirstOrDefault(m => m.EndpointId == settings.MicDeviceEndpointId)
+            : devices.Microphones.FirstOrDefault(m => m.Index == settings.MicDeviceIndex
+                && m.Name == settings.MicDeviceName);
+        return selected ?? devices.DefaultMicrophone;
+    }
+
+    /// <summary>Only call before capture; active recordings never change their source.</summary>
+    public static void PrepareForRecording(AppSettings settings, AudioDeviceSnapshot devices)
+    {
+        var microphone = ResolveMicrophone(settings, devices);
+        if (microphone is not null)
+            (settings.MicDeviceIndex, settings.MicDeviceName, settings.MicDeviceEndpointId) =
+                (microphone.Index, microphone.Name, microphone.EndpointId);
+        Validate(settings, devices);
     }
 
     public static void Validate(AppSettings settings, AudioDeviceSnapshot devices)
