@@ -25,9 +25,11 @@ high-contrast mode turns off.
 - Narrow-window review completed at a 666-pixel screenshot width (the WPF window
   minimum is 680 DIPs). Home content wrapped without horizontal clipping;
   Settings retained its vertical scroll area and visible Cancel/Save actions.
-- A Tab action at narrow width showed a visible focus outline on Settings.
-  The same observation's UI Automation focused-element field still named
-  Search meetings, so keyboard focus reporting needs a follow-up check.
+- At normal preview size, Tab moved the visible focus outline from Settings to
+  Preview tray menu. UI Automation continued to report Search meetings as the
+  focused element for both targets. Keyboard navigation is visibly working;
+  UI Automation focus reporting remains inconsistent and needs a fix or a
+  separate screen-reader evaluation.
 - The UI Automation tree exposed named Settings, Search meetings and Meeting
   app audio controls. This confirms discoverable control names, not a full
   screen-reader pass.
@@ -44,9 +46,10 @@ were not changed; high-contrast precedence is covered by the WPF resource test.
   matched Atlas setup/home/recording/review/notes/settings/menu captures and
   source-versus-render annotations remain outstanding until a macOS runtime is
   available.
-- 200% display scaling was not exercised. The desktop had a separate Biscotti
-  window from #90 active, so the global display setting was left unchanged to
-  avoid affecting that session.
+- 200% display scaling was not exercised. Windows Settings opened, but its
+  Scale control rendered without a readable current value and clicking it
+  opened the Custom scaling page. No global scale setting was changed because
+  the original value could not be verified for restoration.
 - Narrator/screen-reader behavior was not exercised. UI Automation labels and
   the visible focus outline were inspected; that evidence is not represented as
   a screen-reader pass.
