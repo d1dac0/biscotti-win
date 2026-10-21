@@ -19,6 +19,10 @@ summarize locally.
 
 ## Phase 2: Trustworthy long meetings
 
+- #105 Restore missing microphones before recording: preserve connected choices,
+  resolve the Windows default, and cover reconnects with regression tests
+  ([decision](docs/specs/default-microphone-recovery.md)).
+
 **Goal:** long meetings stay complete, private, and robust: long audio,
 long transcripts, at-rest privacy, hardware changes mid-meeting.
 

@@ -96,7 +96,7 @@ public sealed class MeetingService : IAsyncDisposable
         {
             await Task.Run(() =>
             {
-                AudioDevices.Validate(_settings, AudioDevices.Enumerate());
+                AudioDevices.PrepareForRecording(_settings, AudioDevices.Enumerate());
                 var (meeting, dir) = MeetingStore.CreateNew();
                 pendingMeeting = meeting;
                 meeting.StartedUtc = DateTime.UtcNow;
