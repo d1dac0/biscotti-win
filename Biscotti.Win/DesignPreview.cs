@@ -181,7 +181,11 @@ public partial class MainWindow
                 }, recordingElapsedSeconds: () => 138, designPreview: true) { Owner = this };
             _liveMeetingWindow.Show();
         }
-        else _liveMeetingWindow?.SetRecordingComplete();
+        else
+        {
+            _liveMeetingWindow?.SetRecordingComplete();
+            UpdateAutoStopNotice(null);
+        }
         UpdateTrayState(_recording ? RecordingState.Recording : RecordingState.Idle);
     }
 

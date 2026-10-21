@@ -47,7 +47,8 @@ public sealed class MeetingFlowTests
                 Assert.Equal(Visibility.Collapsed, ((Border)main.FindName("AutoStopBanner")).Visibility);
                 Assert.Equal("", ((TextBlock)main.FindName("AutoStopCountdownText")).Text);
                 main.UpdateAutoStopNotice(new Biscotti.Core.Audio.AutoStopNotice(true, true, false, 12));
-                main.UpdateAutoStopNotice(null); // output resumption/stop/shutdown removes the notice
+                main.UpdateRecordingPresentationForCountdownPreview();
+                main.TogglePreviewRecording(); // stopping clears the pending notice too
                 Assert.Equal(Visibility.Collapsed, ((Border)main.FindName("AutoStopBanner")).Visibility);
                 Assert.Equal("", ((TextBlock)main.FindName("AutoStopCountdownText")).Text);
                 main.ConfigureDesignPreview("setup");

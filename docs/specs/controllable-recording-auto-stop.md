@@ -70,7 +70,8 @@ stop requests, cancellation including a queued stop, new output, disabled
 preferences, delayed ticks, microphone-only capture, and end/begin lifecycle.
 WPF checks cover window hide/reopen, notice cleanup, Settings cancellation
 and draft save. Native Windows inspection confirmed the countdown, Keep
-recording cancellation and the complete Settings explanation.
+recording cancellation from both the window and tray, and the complete Settings
+explanation. The synthetic Stop action also clears its pending notice.
 
 Try without audio, models or saved changes:
 `dotnet run --project Biscotti.Win -c Release -- --design-preview=countdown`.

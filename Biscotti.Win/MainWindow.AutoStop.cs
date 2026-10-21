@@ -10,7 +10,9 @@ public partial class MainWindow
     internal void UpdateRecordingPresentationForCountdownPreview()
     {
         if (!_designPreview) throw new InvalidOperationException("Preview requires isolated startup.");
+        _recording = true;
         UpdateRecordingPresentation(Biscotti.Core.Models.RecordingState.Recording, true);
+        UpdateTrayState(Biscotti.Core.Models.RecordingState.Recording);
         RecordButton.Content = "■  Stop & save";
         AudioAppPicker.IsEnabled = AudioDevicesButton.IsEnabled = false;
         StatusText.Text = "Synthetic countdown. No recording, downloads or saved changes.";
