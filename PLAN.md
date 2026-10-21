@@ -154,6 +154,7 @@ Rules:
 ## Decisions
 
 - #87 Markdown notes: [local rendering, explicit-save drafts, and timestamp navigation](docs/specs/markdown-notes.md).
+- #89 Windows appearance: [system-following dark palette with high-contrast precedence](docs/specs/windows-dark-palette.md).
 
 Load-bearing decisions (a stack, a data model, a library choice, an
 architecture) are written down in `docs/specs/`, one file per decision: what

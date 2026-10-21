@@ -29,13 +29,29 @@ public sealed class MeetingFlowTests
                 {
                     Source = new Uri("/Biscotti.Win;component/Theme.xaml", UriKind.Relative),
                 });
-                var regularPaper = app.Resources["PaperBrush"];
-                ThemePalette.Apply(highContrast: true);
+                var theme = app.Resources.MergedDictionaries[0];
+                var regularPaper = theme["PaperBrush"];
+                ThemePalette.Apply(highContrast: false, darkMode: true);
+                Assert.Same(theme["DarkPaperBrush"], app.FindResource("PaperBrush"));
+                Assert.Same(theme["DarkMutedBrush"], app.FindResource("MutedBrush"));
+                Assert.Same(theme["DarkAccentHoverBrush"], app.FindResource("AccentHoverBrush"));
+                Assert.Same(theme["DarkCardBrush"], app.FindResource(SystemColors.ControlBrushKey));
+                Assert.Same(theme["DarkMutedBrush"], app.FindResource(SystemColors.GrayTextBrushKey));
+                Assert.Same(theme["DarkWashBrush"], app.FindResource(SystemColors.ControlLightLightBrushKey));
+                Assert.Same(theme["DarkWashBrush"], app.FindResource(SystemColors.ScrollBarBrushKey));
+                ThemePalette.Apply(highContrast: true, darkMode: true);
                 Assert.Same(SystemColors.WindowBrush, app.Resources["PaperBrush"]);
                 Assert.Same(SystemColors.WindowTextBrush, app.Resources["MutedBrush"]);
                 Assert.Same(SystemColors.HighlightTextBrush, app.Resources["AccentTextBrush"]);
-                ThemePalette.Apply(highContrast: false);
+                Assert.Same(SystemColors.HighlightBrush, app.Resources["AccentHoverBrush"]);
+                Assert.Same(SystemColors.ControlBrush, app.FindResource(SystemColors.ControlBrushKey));
+                ThemePalette.Apply(highContrast: false, darkMode: false);
                 Assert.Same(regularPaper, app.Resources["PaperBrush"]);
+                ThemePalette.Apply(highContrast: false, darkMode: true);
+                Assert.Same(theme["DarkCardBrush"], app.FindResource("CardBrush"));
+                ThemePalette.Apply(highContrast: false, darkMode: false);
+                Assert.Same(regularPaper, app.FindResource("PaperBrush"));
+                Assert.Same(SystemColors.ControlBrush, app.FindResource(SystemColors.ControlBrushKey));
                 var main = new MainWindow(designPreview: true);
                 main.UpdateAutoStopNotice(new Biscotti.Core.Audio.AutoStopNotice(true, true, false, 30));
                 Assert.Equal(Visibility.Visible, ((Border)main.FindName("AutoStopBanner")).Visibility);
