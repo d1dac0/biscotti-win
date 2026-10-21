@@ -30,11 +30,19 @@ public static class AudioDevices
             microphones.Add(new(i, WaveInEvent.GetCapabilities(i).ProductName));
 
         using var enumerator = new MMDeviceEnumerator();
-        var captureEndpoints = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
-            .Select(endpoint =>
-            {
-                using (endpoint) return new CaptureEndpointInfo(endpoint.ID, endpoint.FriendlyName);
-            }).ToArray();
+        CaptureEndpointInfo[] captureEndpoints = [];
+        try
+        {
+            captureEndpoints = enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+                .Select(endpoint =>
+                {
+                    using (endpoint) return new CaptureEndpointInfo(endpoint.ID, endpoint.FriendlyName);
+                }).ToArray();
+        }
+        catch (Exception)
+        {
+            // Endpoint matching only enables optional AEC; WaveIn capture stays available.
+        }
         microphones = MicrophoneEndpointMatcher.Attach(microphones, captureEndpoints).ToList();
 
         var outputs = new List<OutputDeviceChoice> { new(null, "Windows default output") };

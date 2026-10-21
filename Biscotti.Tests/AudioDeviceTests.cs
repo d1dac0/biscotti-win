@@ -48,6 +48,7 @@ public sealed class AudioDeviceTests
         var attached = MicrophoneEndpointMatcher.Attach(microphones, endpoints);
         Assert.Equal("mic-1", attached[0].EndpointId);
         Assert.Equal("mic-2", attached[1].EndpointId);
+        Assert.All(MicrophoneEndpointMatcher.Attach(microphones, []), m => Assert.Null(m.EndpointId));
 
         var ambiguous = MicrophoneEndpointMatcher.Attach(microphones,
             [new("mic-1", "Headset"), new("mic-2", "HEADSET")]);
