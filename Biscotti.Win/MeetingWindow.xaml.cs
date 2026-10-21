@@ -1,7 +1,10 @@
 using System.Globalization;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Threading;
 using Biscotti.Core.Audio;
 using Biscotti.Core.Models;
 using Biscotti.Core.Storage;
@@ -15,10 +18,16 @@ namespace Biscotti.Win
         private readonly bool _designPreview;
         private bool _isLiveRecording;
         private bool _isProcessing;
-        private WaveOutEvent? _audioOutput;
+        private IWavePlayer? _audioOutput;
+        private readonly Func<string, Stream> _audioStreamFactory;
+        private readonly Func<IWavePlayer> _audioOutputFactory;
         private WaveFileReader? _audioReader;
+        private Stream? _audioSourceStream;
         private EventHandler<StoppedEventArgs>? _playbackStoppedHandler;
         private string? _playingChannel;
+        private readonly DispatcherTimer _playbackTimer;
+        private bool _isScrubbing;
+        private bool _updatingPosition;
         private readonly Action<string, double>? _addTimestampedNote;
         private readonly Func<double>? _recordingElapsedSeconds;
         private readonly Func<Meeting, CancellationToken, Task>? _recoverInterruptedMeeting;
@@ -31,10 +40,16 @@ namespace Biscotti.Win
             Func<Meeting, CancellationToken, Task>? recoverInterruptedMeeting = null,
             Func<Meeting, CancellationToken, Task>? retryTranscription = null,
             Func<Meeting, CancellationToken, Task>? regenerateSummary = null,
-            Action<Meeting>? saveMeeting = null)
+            Action<Meeting>? saveMeeting = null,
+            Func<string, Stream>? audioStreamFactory = null,
+            Func<IWavePlayer>? audioOutputFactory = null)
         {
             InitializeComponent();
+            _playbackTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+            _playbackTimer.Tick += (_, _) => RefreshTransportPosition();
             _meeting = meeting;
+            _audioStreamFactory = audioStreamFactory ?? EncryptedAudioPlayback.OpenWavStream;
+            _audioOutputFactory = audioOutputFactory ?? (() => new WaveOutEvent());
             _designPreview = designPreview;
             _saveMeeting = saveMeeting ?? (designPreview ? _ => { } : MeetingStore.Save);
             _isLiveRecording = isLiveRecording;
@@ -62,7 +77,11 @@ namespace Biscotti.Win
             UpdateReviewState();
             RefreshProcessingPanel();
             if (!isLiveRecording && !string.IsNullOrWhiteSpace(meeting.Summary)) ReviewTabs.SelectedItem = SummaryTab;
-            Closed += (_, _) => StopPlayback();
+            Closed += (_, _) =>
+            {
+                _playbackTimer.Stop();
+                StopPlayback();
+            };
             InitializeEditing();
         }
 
@@ -154,20 +173,62 @@ namespace Biscotti.Win
             if (!string.IsNullOrWhiteSpace(_meeting.Summary)) ReviewTabs.SelectedItem = SummaryTab;
         }
 
-        private void MicPlay_Click(object sender, RoutedEventArgs e) =>
-            BeginPlayback("microphone", Path.Combine(MeetingStore.MeetingDir(_meeting.Id), "mic.wav"));
+        private string SelectedChannel => (AudioChannelSelector.SelectedItem as ComboBoxItem)?.Tag as string ?? "microphone";
 
-        private void SysPlay_Click(object sender, RoutedEventArgs e) =>
-            BeginPlayback("system", Path.Combine(MeetingStore.MeetingDir(_meeting.Id), "sys.wav"));
+        private static string AudioPath(string channel, Guid meetingId) =>
+            Path.Combine(MeetingStore.MeetingDir(meetingId), channel == "system" ? "sys.wav" : "mic.wav");
 
-        private void MicStop_Click(object sender, RoutedEventArgs e) => StopPlaybackFor("microphone");
+        private void AudioPlayPause_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_audioOutput is null)
+                {
+                    BeginPlayback(SelectedChannel, AudioPath(SelectedChannel, _meeting.Id), AudioPositionSlider.Value);
+                    return;
+                }
 
-        private void SysStop_Click(object sender, RoutedEventArgs e) => StopPlaybackFor("system");
+                if (_audioOutput.PlaybackState == PlaybackState.Playing)
+                {
+                    _audioOutput.Pause();
+                    _playbackTimer.Stop();
+                    AudioPlayPauseButton.Content = "Resume";
+                    AudioStatus.Text = $"Paused {_playingChannel} audio.";
+                    RefreshTransportPosition();
+                }
+                else
+                {
+                    _audioOutput.Play();
+                    _playbackTimer.Start();
+                    AudioPlayPauseButton.Content = "Pause";
+                    AudioStatus.Text = $"Playing {_playingChannel} audio…";
+                }
+                UpdatePlaybackButtons();
+            }
+            catch (Exception ex) { AudioStatus.Text = $"Could not control audio playback. {ex.Message}"; }
+        }
 
-        private void BeginPlayback(string channel, string path)
+        private void AudioStop_Click(object sender, RoutedEventArgs e)
+        {
+            var channel = _playingChannel;
+            var error = StopPlayback();
+            AudioStatus.Text = error is null
+                ? channel is null ? "Audio playback stopped." : $"{char.ToUpperInvariant(channel[0])}{channel[1..]} audio playback stopped."
+                : $"Could not stop audio playback cleanly. {error.Message}";
+        }
+
+        private void AudioChannel_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_audioOutput is null || _playingChannel == SelectedChannel) return;
+            var startSeconds = CurrentPositionSeconds();
+            var shouldPlay = _audioOutput.PlaybackState == PlaybackState.Playing;
+            BeginPlayback(SelectedChannel, AudioPath(SelectedChannel, _meeting.Id), startSeconds, shouldPlay);
+        }
+
+        private void BeginPlayback(string channel, string path, double startSeconds = 0, bool autoPlay = true)
         {
             if (_designPreview) { AudioStatus.Text = "Preview only. No meeting audio is opened."; return; }
-            var stopError = StopPlayback();
+            var stopError = StopPlayback(resetPosition: false);
             if (stopError is not null)
             {
                 AudioStatus.Text = $"Could not stop the previous audio playback. {stopError.Message}";
@@ -175,15 +236,17 @@ namespace Biscotti.Win
             }
             Stream? stream = null;
             WaveFileReader? reader = null;
-            WaveOutEvent? output = null;
+            IWavePlayer? output = null;
             try
             {
-                stream = EncryptedAudioPlayback.OpenWavStream(path);
+                stream = _audioStreamFactory(path);
                 reader = new WaveFileReader(stream);
-                stream = null; // WaveFileReader owns the stream.
+                _audioSourceStream = stream;
+                stream = null;
                 if (reader.Length <= 44) throw new InvalidDataException($"The {channel} recording contains no audio.");
+                reader.Position = PositionForSeconds(startSeconds, reader.Length);
 
-                output = new WaveOutEvent();
+                output = _audioOutputFactory();
                 EventHandler<StoppedEventArgs>? stoppedHandler = null;
                 stoppedHandler = (_, args) =>
                 {
@@ -197,9 +260,12 @@ namespace Biscotti.Win
                 _playingChannel = channel;
                 output.PlaybackStopped += stoppedHandler;
                 output.Init(reader);
-                output.Play();
+                if (autoPlay) output.Play();
+                if (autoPlay) _playbackTimer.Start();
                 UpdatePlaybackButtons();
-                AudioStatus.Text = $"Playing {channel} audio…";
+                AudioPlayPauseButton.Content = autoPlay ? "Pause" : "Resume";
+                AudioStatus.Text = autoPlay ? $"Playing {channel} audio…" : $"Ready to play {channel} audio.";
+                RefreshTransportPosition();
             }
             catch (Exception ex)
             {
@@ -209,24 +275,33 @@ namespace Biscotti.Win
                 {
                     output?.Dispose();
                     reader?.Dispose();
+                    _audioSourceStream?.Dispose();
+                    _audioSourceStream = null;
                 }
                 AudioStatus.Text = $"Could not play {channel} audio. {ex.Message}";
             }
         }
 
-        private void PlaybackStopped(WaveOutEvent output, WaveFileReader reader, string channel,
+        private void PlaybackStopped(IWavePlayer output, WaveFileReader reader, string channel,
             EventHandler<StoppedEventArgs> stoppedHandler, StoppedEventArgs args)
         {
             if (!ReferenceEquals(_audioOutput, output)) return;
             output.PlaybackStopped -= stoppedHandler;
             _audioOutput = null;
             _audioReader = null;
+            var sourceStream = _audioSourceStream;
+            _audioSourceStream = null;
             _playbackStoppedHandler = null;
             _playingChannel = null;
+            _playbackTimer.Stop();
             Exception? cleanupError = null;
             try { output.Dispose(); } catch (Exception ex) { cleanupError = ex; }
             try { reader.Dispose(); } catch (Exception ex) { cleanupError ??= ex; }
+            try { sourceStream?.Dispose(); } catch (Exception ex) { cleanupError ??= ex; }
             UpdatePlaybackButtons();
+            AudioPlayPauseButton.Content = "Play";
+            AudioPositionSlider.Value = 0;
+            UpdatePositionText(0, 0);
             AudioStatus.Text = args.Exception is null
                 ? cleanupError is null
                     ? $"{char.ToUpperInvariant(channel[0])}{channel[1..]} audio playback finished."
@@ -234,25 +309,25 @@ namespace Biscotti.Win
                 : $"Could not play {channel} audio. {args.Exception.Message}";
         }
 
-        private void StopPlaybackFor(string channel)
-        {
-            if (_playingChannel != channel) return;
-            var error = StopPlayback();
-            AudioStatus.Text = error is null
-                ? $"{char.ToUpperInvariant(channel[0])}{channel[1..]} audio playback stopped."
-                : $"Could not stop {channel} audio playback cleanly. {error.Message}";
-        }
-
-        private Exception? StopPlayback()
+        private Exception? StopPlayback(bool resetPosition = true)
         {
             var output = _audioOutput;
             var reader = _audioReader;
+            var sourceStream = _audioSourceStream;
             var handler = _playbackStoppedHandler;
             _audioOutput = null;
             _audioReader = null;
+            _audioSourceStream = null;
             _playbackStoppedHandler = null;
             _playingChannel = null;
+            _playbackTimer.Stop();
             UpdatePlaybackButtons();
+            AudioPlayPauseButton.Content = "Play";
+            if (resetPosition)
+            {
+                AudioPositionSlider.Value = 0;
+                UpdatePositionText(0, 0);
+            }
             Exception? error = null;
             if (output is not null)
             {
@@ -261,14 +336,110 @@ namespace Biscotti.Win
                 try { output.Dispose(); } catch (Exception ex) { error ??= ex; }
             }
             try { reader?.Dispose(); } catch (Exception ex) { error ??= ex; }
+            try { sourceStream?.Dispose(); } catch (Exception ex) { error ??= ex; }
             return error;
         }
 
         private void UpdatePlaybackButtons()
         {
-            if (MicStopButton is null || SysStopButton is null) return;
-            MicStopButton.IsEnabled = _playingChannel == "microphone";
-            SysStopButton.IsEnabled = _playingChannel == "system";
+            if (AudioStopButton is null) return;
+            AudioStopButton.IsEnabled = _audioOutput is not null;
+            AudioPlayPauseButton.IsEnabled = true;
+        }
+
+        internal static long PositionForSeconds(double seconds, long wavLength)
+        {
+            const int bytesPerSecond = 16_000 * 2;
+            var pcmLength = Math.Max(0, wavLength - 44);
+            var requested = double.IsFinite(seconds) ? seconds : 0;
+            var bytes = Math.Clamp(requested * bytesPerSecond, 0, pcmLength);
+            bytes -= bytes % 2; // 16-bit PCM block alignment.
+            return 44 + (long)bytes;
+        }
+
+        private double CurrentPositionSeconds() => _audioReader is null ? AudioPositionSlider.Value
+            : Math.Max(0, _audioReader.Position - 44) / 32_000d;
+
+        private void RefreshTransportPosition()
+        {
+            if (_audioReader is null || _isScrubbing) return;
+            var position = Math.Max(0, _audioReader.Position - 44);
+            var duration = Math.Max(0, _audioReader.Length - 44);
+            _updatingPosition = true;
+            try
+            {
+                AudioPositionSlider.Maximum = Math.Max(1, duration / 32_000d);
+                AudioPositionSlider.Value = Math.Clamp(position / 32_000d, 0, AudioPositionSlider.Maximum);
+            }
+            finally { _updatingPosition = false; }
+            UpdatePositionText(position / 32_000d, duration / 32_000d);
+        }
+
+        private void UpdatePositionText(double position, double duration) =>
+            AudioPositionText.Text = $"{FormatAudioTime(position)} / {FormatAudioTime(duration)}";
+
+        private static string FormatAudioTime(double seconds)
+        {
+            var time = TimeSpan.FromSeconds(Math.Max(0, seconds));
+            return $"{(long)time.TotalHours:00}:{time.Minutes:00}:{time.Seconds:00}";
+        }
+
+        private void AudioSlider_MouseDown(object sender, MouseButtonEventArgs e) => _isScrubbing = true;
+
+        private void AudioSlider_MouseUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isScrubbing) return;
+            _isScrubbing = false;
+            SeekPlayback(AudioPositionSlider.Value, resume: _audioOutput?.PlaybackState == PlaybackState.Playing);
+        }
+
+        private void SeekPlayback(double seconds, bool resume)
+        {
+            if (_audioReader is null || _audioOutput is null) return;
+            var output = _audioOutput;
+            var wasPlaying = output.PlaybackState == PlaybackState.Playing;
+            try
+            {
+                if (wasPlaying) output.Pause();
+                _audioReader.Position = PositionForSeconds(seconds, _audioReader.Length);
+                if (resume) output.Play();
+                RefreshTransportPosition();
+            }
+            catch (Exception ex) { AudioStatus.Text = $"Could not seek audio. {ex.Message}"; }
+        }
+
+        private void SeekSelectedChannel(double seconds, bool startPlayback = false)
+        {
+            var channel = SelectedChannel;
+            if (_audioReader is not null && _playingChannel == channel)
+            {
+                SeekPlayback(seconds, resume: startPlayback || _audioOutput?.PlaybackState == PlaybackState.Playing);
+                return;
+            }
+            BeginPlayback(channel, AudioPath(channel, _meeting.Id), seconds);
+        }
+
+        private void AudioPosition_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_updatingPosition || _isScrubbing || _audioReader is null) return;
+            SeekPlayback(AudioPositionSlider.Value, resume: _audioOutput?.PlaybackState == PlaybackState.Playing);
+        }
+
+        private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (Keyboard.FocusedElement is TextBox || Keyboard.FocusedElement is ComboBox || Keyboard.FocusedElement is Slider) return;
+            if (e.Key == Key.Space)
+            {
+                AudioPlayPause_Click(AudioPlayPauseButton, new RoutedEventArgs(Button.ClickEvent));
+                e.Handled = true;
+            }
+            else if (e.Key is Key.Left or Key.Right)
+            {
+                var delta = e.Key == Key.Left ? -5d : 5d;
+                if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) delta *= 6;
+                SeekSelectedChannel(Math.Max(0, CurrentPositionSeconds() + delta));
+                e.Handled = true;
+            }
         }
 
         private void Save_Click(object sender, RoutedEventArgs e)
@@ -282,16 +453,25 @@ namespace Biscotti.Win
             var ok = MessageBox.Show(this, "Delete this meeting and its audio? This cannot be undone.",
                 "Confirm delete", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (ok != MessageBoxResult.Yes) return;
-            var stopError = StopPlayback();
-            if (stopError is not null)
+            if (!TryDeleteMeeting(() => MeetingStore.Delete(_meeting.Id), stopError =>
             {
                 MessageBox.Show(this, $"Could not stop audio playback. The meeting was not deleted.\n\n{stopError.Message}",
                     "Could not delete meeting", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
-            }
-            MeetingStore.Delete(_meeting.Id);
+            })) return;
             _discardEditsOnClose = true;
             Close();
+        }
+
+        internal bool TryDeleteMeeting(Action deleteMeeting, Action<Exception>? reportStopError = null)
+        {
+            var stopError = StopPlayback();
+            if (stopError is not null)
+            {
+                reportStopError?.Invoke(stopError);
+                return false;
+            }
+            deleteMeeting();
+            return true;
         }
     }
 
