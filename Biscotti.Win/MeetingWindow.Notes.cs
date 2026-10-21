@@ -120,6 +120,7 @@ public partial class MeetingWindow
     internal void NavigateToTimestamp(double seconds)
     {
         if (!double.IsFinite(seconds) || seconds < 0) return;
+        SeekSelectedChannel(seconds, startPlayback: true);
         var lines = _meeting.Transcript.Where(line => double.IsFinite(line.StartSeconds)).ToList();
         var line = lines.Where(line => line.StartSeconds <= seconds && seconds <= line.EndSeconds)
             .OrderByDescending(line => line.StartSeconds).FirstOrDefault()
