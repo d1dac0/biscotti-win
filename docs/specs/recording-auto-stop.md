@@ -1,6 +1,6 @@
 # Auto-stop recording after loopback silence
 
-**Status:** In Progress
+**Status:** Superseded by [controllable-recording-auto-stop.md](controllable-recording-auto-stop.md) (#86).
 
 Issue: #4
 

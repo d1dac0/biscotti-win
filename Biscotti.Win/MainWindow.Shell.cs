@@ -17,6 +17,7 @@ public partial class MainWindow
     private Forms.ToolStripMenuItem? _calendarMenuItem;
     private Forms.ToolStripMenuItem? _recentMenuItem;
     private Forms.ToolStripMenuItem? _exitMenuItem;
+    private Forms.ToolStripMenuItem? _keepRecordingMenuItem;
     private GlobalHotkeyRegistration? _hotkeyRegistration;
     private string? _hotkeyRegistrationError;
     private readonly System.Windows.Threading.DispatcherTimer _shellTimer = new() { Interval = TimeSpan.FromMilliseconds(750) };
@@ -35,6 +36,8 @@ public partial class MainWindow
         _calendarMenuItem = new Forms.ToolStripMenuItem("Upcoming meetings");
         _recentMenuItem = new Forms.ToolStripMenuItem("Recent meetings");
         menu.Items.Add(_recordMenuItem);
+        _keepRecordingMenuItem = new Forms.ToolStripMenuItem("Keep recording", null, (_, _) => KeepRecording_Click(this, new RoutedEventArgs())) { Visible = false };
+        menu.Items.Add(_keepRecordingMenuItem);
         menu.Items.Add(_openLastMenuItem);
         menu.Items.Add(_calendarMenuItem);
         menu.Items.Add(_recentMenuItem);
@@ -255,6 +258,8 @@ public partial class MainWindow
             _settings.OllamaModel = candidate.OllamaModel;
             _settings.SummaryLength = candidate.SummaryLength;
             _settings.SummaryGuidance = candidate.SummaryGuidance;
+            _meetings.SetAutoStopEnabled(candidate.AutoStopEnabled);
+            AutoStopBox.IsChecked = candidate.AutoStopEnabled;
             _settings.CalendarStartNotifications = candidate.CalendarStartNotifications;
             _settings.CalendarTrayNavigation = candidate.CalendarTrayNavigation;
             _hotkeyRegistrationError = null;
@@ -313,6 +318,7 @@ public partial class MainWindow
 
     private void DisposeShell()
     {
+        UpdateAutoStopNotice(null);
         _shellTimer.Stop();
         _hotkeyRegistration?.Dispose();
         _hotkeyRegistration = null;

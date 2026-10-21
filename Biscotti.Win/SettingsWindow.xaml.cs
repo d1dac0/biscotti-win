@@ -27,6 +27,7 @@ public partial class SettingsWindow : Window
         _candidate = settings.RecordingHotkey ?? "Ctrl+Alt+R";
         _saveSettings = saveSettings;
         ShortcutBox.Text = _candidate;
+        AutoStopBox.IsChecked = settings.AutoStopEnabled;
         VocabularyBox.Text = settings.LocalVocabulary ?? "";
         WhisperBox.ItemsSource = ModelStore.All;
         WhisperBox.SelectedItem = ModelStore.All.FirstOrDefault(m => m.Id == settings.WhisperModelId) ?? ModelStore.All[0];
@@ -83,6 +84,7 @@ public partial class SettingsWindow : Window
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         _draft.RecordingHotkey = _candidate;
+        _draft.AutoStopEnabled = AutoStopBox.IsChecked == true;
         _draft.LocalVocabulary = VocabularyBox.Text;
         _draft.WhisperModelId = (WhisperBox.SelectedItem as ModelStore.WhisperModel)?.Id;
         _draft.WhisperRuntime = RuntimeBox.SelectedValue as string ?? "cpu";

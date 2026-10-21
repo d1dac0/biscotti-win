@@ -230,3 +230,17 @@ API and inexact test-read warnings remain.
 Local verification: `tools/build.ps1` and `tools/check.ps1` passed with 158
 Core/MCP tests and 1 Windows flow test, none skipped. The synthetic recovery
 preview passed in the native Windows app.
+
+## Controllable auto-stop (#86)
+
+Decision and plan: [controllable recording auto-stop](docs/specs/controllable-recording-auto-stop.md).
+Baseline at dfde794: build/check passed (158 Core tests, 1 WPF flow test).
+Existing NAudio obsolete API and inexact test-read warnings remain.
+
+Implemented saved enable/disable controls, a 30-second countdown after five
+minutes of armed output silence, and a session-only Keep recording override.
+The [decision](docs/specs/controllable-recording-auto-stop.md) documents the
+Windows activity investigation and why process/session state is not call state.
+After integrating `origin/main` at ac8fda6, build/check passed: 170 Core/MCP
+tests and 1 WPF flow test, none skipped. Native synthetic countdown cancellation
+and Settings were inspected; live hardware/cross-app measurements were skipped.
