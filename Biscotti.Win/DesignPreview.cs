@@ -9,14 +9,33 @@ namespace Biscotti.Win;
 /// the normal startup path, profile settings, storage, model downloads and capture.</summary>
 internal static class DesignPreview
 {
+    private static Task PreviewRecoverAsync(Meeting meeting, CancellationToken ct)
+    {
+        meeting.EndedUtc ??= DateTime.UtcNow;
+        meeting.ProcessingStatus = MeetingProcessingStatus.TranscriptionPending;
+        return Task.CompletedTask;
+    }
+
+    private static Task PreviewRetryTranscriptionAsync(Meeting meeting, CancellationToken ct)
+    {
+        meeting.ProcessingStatus = MeetingProcessingStatus.SummaryPending;
+        return Task.CompletedTask;
+    }
+
+    private static Task PreviewRegenerateSummaryAsync(Meeting meeting, CancellationToken ct)
+    {
+        meeting.ProcessingStatus = MeetingProcessingStatus.Complete;
+        return Task.CompletedTask;
+    }
+
     public static bool TryShow(string[] args)
     {
         var argument = args.FirstOrDefault(a => a == "--design-preview" || a.StartsWith("--design-preview=", StringComparison.Ordinal));
         if (argument is null) return false;
         var mode = argument.Contains('=') ? argument.Split('=', 2)[1] : "history";
-        if (!new[] { "setup", "empty", "history", "recording", "processing", "failure", "review", "transfer", "speakers", "tray" }.Contains(mode))
+        if (!new[] { "setup", "empty", "history", "recording", "processing", "failure", "review", "transfer", "speakers", "recovery", "tray" }.Contains(mode))
         {
-            MessageBox.Show("Preview states: setup, empty, history, recording, processing, failure, review, transfer, speakers, tray.", "Design preview");
+            MessageBox.Show("Preview states: setup, empty, history, recording, processing, failure, review, transfer, speakers, recovery, tray.", "Design preview");
             System.Windows.Application.Current.Shutdown();
             return true;
         }
@@ -29,6 +48,17 @@ internal static class DesignPreview
         window.Show();
         if (mode == "recording") window.TogglePreviewRecording();
         if (mode == "review") new MeetingWindow(CreateMeeting(), designPreview: true) { Owner = window }.Show();
+        if (mode == "recovery")
+        {
+            var interrupted = CreateMeeting();
+            interrupted.ProcessingStatus = MeetingProcessingStatus.Recording;
+            interrupted.EndedUtc = null;
+            var review = new MeetingWindow(interrupted, designPreview: true,
+                recoverInterruptedMeeting: PreviewRecoverAsync,
+                retryTranscription: PreviewRetryTranscriptionAsync,
+                regenerateSummary: PreviewRegenerateSummaryAsync) { Owner = window };
+            review.Show();
+        }
         if (mode == "transfer")
             new ImportPreviewWindow(new Biscotti.Core.Storage.ImportPreview(new[] { CreateMeeting() }, 2,
                 new[] { "Row 4: invalid fields, dates or timeline. Check the CSV format." }))
@@ -70,6 +100,11 @@ public partial class MainWindow
         Title = "Biscotti Win — synthetic design preview";
         PreviewBanner.Visibility = Visibility.Visible;
         var meeting = DesignPreview.CreateMeeting();
+        if (mode == "recovery")
+        {
+            meeting.ProcessingStatus = MeetingProcessingStatus.Recording;
+            meeting.EndedUtc = null;
+        }
         var empty = mode is "setup" or "empty";
         SetHistory(empty ? new List<Meeting>() : new List<Meeting> { meeting }, empty ? null : meeting.Id);
         AudioAppPicker.ItemsSource = new[] { new AudioAppChoice(null, null, "All speaker audio (synthetic preview)") };

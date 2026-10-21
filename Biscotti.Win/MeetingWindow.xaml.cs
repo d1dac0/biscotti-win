@@ -21,10 +21,16 @@ namespace Biscotti.Win
         private string? _playingChannel;
         private readonly Action<string, double>? _addTimestampedNote;
         private readonly Func<double>? _recordingElapsedSeconds;
+        private readonly Func<Meeting, CancellationToken, Task>? _recoverInterruptedMeeting;
+        private readonly Func<Meeting, CancellationToken, Task>? _retryTranscription;
+        private readonly Func<Meeting, CancellationToken, Task>? _regenerateSummary;
 
         public MeetingWindow(Meeting meeting, bool isLiveRecording = false,
             Action<string, double>? addTimestampedNote = null, Func<double>? recordingElapsedSeconds = null,
-            bool designPreview = false)
+            bool designPreview = false,
+            Func<Meeting, CancellationToken, Task>? recoverInterruptedMeeting = null,
+            Func<Meeting, CancellationToken, Task>? retryTranscription = null,
+            Func<Meeting, CancellationToken, Task>? regenerateSummary = null)
         {
             InitializeComponent();
             _meeting = meeting;
@@ -32,6 +38,9 @@ namespace Biscotti.Win
             _isLiveRecording = isLiveRecording;
             _addTimestampedNote = addTimestampedNote;
             _recordingElapsedSeconds = recordingElapsedSeconds;
+            _recoverInterruptedMeeting = recoverInterruptedMeeting;
+            _retryTranscription = retryTranscription;
+            _regenerateSummary = regenerateSummary;
             DataContext = meeting;
             LiveStatus.Visibility = isLiveRecording ? Visibility.Visible : Visibility.Collapsed;
             LiveNoteEditor.Visibility = isLiveRecording && addTimestampedNote is not null && recordingElapsedSeconds is not null
@@ -48,6 +57,7 @@ namespace Biscotti.Win
             UpdateSpeakerControls();
             RefreshTimestampedNotes();
             UpdateReviewState();
+            RefreshProcessingPanel();
             if (!isLiveRecording && !string.IsNullOrWhiteSpace(meeting.Summary)) ReviewTabs.SelectedItem = SummaryTab;
             Closed += (_, _) => StopPlayback();
         }
@@ -59,6 +69,7 @@ namespace Biscotti.Win
             TranscriptScroller.ScrollToEnd();
             RefreshTimestampedNotes();
             UpdateReviewState();
+            RefreshProcessingPanel();
         }
 
         private void UpdateReviewState()

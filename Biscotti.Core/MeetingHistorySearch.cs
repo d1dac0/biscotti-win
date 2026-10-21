@@ -30,6 +30,17 @@ public sealed record MeetingSearchField(string Label, string Text, int Rank);
 public sealed record MeetingHistoryResult(Meeting Meeting, string Snippet, int Rank)
 {
     public string DateGroup => Meeting.StartedUtc.ToLocalTime().ToString("yyyy-MM");
+    public string ProcessingNotice => Meeting.ProcessingStatus switch
+    {
+        MeetingProcessingStatus.Recording => "Recording stopped unexpectedly · recover saved audio",
+        MeetingProcessingStatus.Transcribing => "Transcription stopped unexpectedly · retry transcription",
+        MeetingProcessingStatus.TranscriptionFailed => "Transcription needs attention · retry from saved audio",
+        MeetingProcessingStatus.TranscriptionPending => "Saved audio recovered · retry transcription",
+        MeetingProcessingStatus.Summarizing => "Summary stopped unexpectedly · regenerate summary",
+        MeetingProcessingStatus.SummaryPending => "Transcript ready · generate or refresh summary",
+        MeetingProcessingStatus.SummaryFailed => "Summary needs attention · retry local summary",
+        _ => "",
+    };
 }
 
 public static class MeetingHistorySearch

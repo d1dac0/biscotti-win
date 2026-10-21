@@ -129,6 +129,18 @@ public sealed class MeetingTransferTests : IDisposable
     }
 
     [Fact]
+    public void ProcessingStatusRoundTripsThroughProtectedMeetingMetadata()
+    {
+        var meeting = Synthetic();
+        meeting.ProcessingStatus = MeetingProcessingStatus.SummaryFailed;
+
+        MeetingStore.Save(meeting);
+
+        var loaded = Assert.Single(MeetingStore.LoadAll());
+        Assert.Equal(MeetingProcessingStatus.SummaryFailed, loaded.ProcessingStatus);
+    }
+
+    [Fact]
     public void CancellationAfterFirstCommitKeepsCompletedMeetingAndRetrySkipsIt()
     {
         var first = Synthetic();

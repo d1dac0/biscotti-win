@@ -5,6 +5,7 @@ public sealed class Meeting
     public Guid Id { get; init; } = Guid.NewGuid();
     public DateTime StartedUtc { get; set; }
     public DateTime? EndedUtc { get; set; }
+    public MeetingProcessingStatus ProcessingStatus { get; set; } = MeetingProcessingStatus.Complete;
     public string Title { get; set; } = "";
     public string? Notes { get; set; }
     public string? Summary { get; set; }
@@ -12,6 +13,18 @@ public sealed class Meeting
     public List<string> ActionItems { get; set; } = new();
     public List<TimestampedMeetingNote> TimestampedNotes { get; set; } = new();
     public List<TranscriptLine> Transcript { get; set; } = new();
+}
+
+public enum MeetingProcessingStatus
+{
+    Complete,
+    Recording,
+    Transcribing,
+    TranscriptionFailed,
+    TranscriptionPending,
+    SummaryPending,
+    Summarizing,
+    SummaryFailed,
 }
 
 public sealed class TimestampedMeetingNote
