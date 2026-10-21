@@ -17,9 +17,10 @@ namespace Biscotti.Core;
 /// </summary>
 public sealed class MeetingService : IAsyncDisposable
 {
-    private static readonly TimeSpan AutoStopSilenceTimeout = TimeSpan.FromMinutes(5);
     private readonly DualChannelRecorder _recorder = new();
-    private readonly LoopbackSilenceMonitor _loopbackSilence = new(AutoStopSilenceTimeout);
+    private readonly object _autoStopGate = new();
+    private readonly RecordingAutoStop _autoStop = new();
+    private AutoStopNotice _autoStopNotice = new(true, false, false);
     private readonly AppSettings _settings;
     private readonly SavedMeetingProcessor _savedMeetingProcessor;
     private readonly object _meetingMutationLock = new();
@@ -38,6 +39,8 @@ public sealed class MeetingService : IAsyncDisposable
     public MeetingService(AppSettings settings)
     {
         _settings = settings;
+        _autoStop.SetEnabled(settings.AutoStopEnabled);
+        _autoStopNotice = new(settings.AutoStopEnabled, false, false);
         _savedMeetingProcessor = new SavedMeetingProcessor(settings);
         _recorder.LoopbackSamplesAvailable += OnLoopbackSamplesAvailable;
     }
@@ -54,15 +57,37 @@ public sealed class MeetingService : IAsyncDisposable
     public (long mic, long sys) RecordingStats => _recorder.TotalBytes;
     public string SystemAudioStatus => _recorder.SystemAudioStatus;
     public string RecordingDeviceWarning => _recorder.DeviceWarning;
-    public string AutoStopStatus => _loopbackSilence.IsArmed
-        ? "Auto-stop armed: recording stops after 5 minutes without output audio."
-        : "Auto-stop inactive until output audio is detected; in-person recording stays manual.";
+    public AutoStopNotice AutoStopNotice { get { lock (_autoStopGate) return _autoStopNotice; } }
+    public string AutoStopStatus => AutoStopNotice.Description;
+
+    public void SetAutoStopEnabled(bool enabled)
+    {
+        lock (_autoStopGate)
+        {
+            _settings.AutoStopEnabled = enabled;
+            _autoStop.SetEnabled(enabled);
+            _autoStopNotice = new(enabled, false, false);
+        }
+    }
+
+    public void KeepRecording()
+    {
+        lock (_autoStopGate)
+        {
+            _autoStop.KeepRecording();
+            _autoStopNotice = _autoStop.Poll(DateTimeOffset.UtcNow);
+        }
+    }
 
     public async Task StartRecordingAsync(int? targetProcessId = null, string? targetProcessName = null,
         CalendarMeeting? calendarMeeting = null, bool allowSystemWideLoopback = false)
     {
         if (State != RecordingState.Idle) throw new InvalidOperationException("A meeting is already in progress.");
-        _loopbackSilence.Reset();
+        lock (_autoStopGate)
+        {
+            _autoStop.Begin(_settings.AutoStopEnabled);
+            _autoStopNotice = new(_settings.AutoStopEnabled, false, false);
+        }
         _currentCalendarMeeting = calendarMeeting;
         SetState(RecordingState.Starting, "Checking audio devices…");
         var previousMeeting = _current;
@@ -94,10 +119,11 @@ public sealed class MeetingService : IAsyncDisposable
             _liveTranscription.WarningReady += warning => AudioWarning?.Invoke(warning);
             _liveTranscription.Start();
             SetState(RecordingState.Recording, $"Recording… click Stop when the call ends. {_recorder.SystemAudioStatus}");
-            _autoStopTimer = new Timer(CheckForLoopbackSilence, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+            _autoStopTimer = new Timer(CheckForLoopbackSilence, _current, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         }
         catch
         {
+            StopAutoStopTimer();
             _currentCalendarMeeting = null;
             try
             {
@@ -151,16 +177,23 @@ public sealed class MeetingService : IAsyncDisposable
         CurrentMeetingUpdated?.Invoke(meeting);
     }
 
-    public async Task StopAndProcessAsync(CancellationToken ct = default)
-    {
-        if (Interlocked.CompareExchange(ref _stopProcessStarted, 1, 0) != 0) return;
-        if (State != RecordingState.Recording || _current is null)
-        {
-            Interlocked.Exchange(ref _stopProcessStarted, 0);
-            throw new InvalidOperationException("Not recording.");
-        }
+    public Task StopAndProcessAsync(CancellationToken ct = default) => StopAndProcessAsync(ct, null);
 
-        StopAutoStopTimer();
+    private async Task StopAndProcessAsync(CancellationToken ct, Meeting? expectedMeeting)
+    {
+        lock (_autoStopGate)
+        {
+            // Ignore queued ticks from an old recording, or a newly disabled preference.
+            if (expectedMeeting is not null && (!ReferenceEquals(expectedMeeting, _current)
+                || !_autoStop.CanStop || State != RecordingState.Recording)) return;
+            if (Interlocked.CompareExchange(ref _stopProcessStarted, 1, 0) != 0) return;
+            if (State != RecordingState.Recording || _current is null)
+            {
+                Interlocked.Exchange(ref _stopProcessStarted, 0);
+                throw new InvalidOperationException("Not recording.");
+            }
+            StopAutoStopTimer();
+        }
         try { await ProcessRecordingAsync(ct); }
         catch
         {
@@ -209,21 +242,36 @@ public sealed class MeetingService : IAsyncDisposable
         }
     }
 
-    private void OnLoopbackSamplesAvailable(byte[] samples, int bytesRecorded, int channels) =>
-        _loopbackSilence.Observe(samples, bytesRecorded, channels, DateTimeOffset.UtcNow);
+    private void OnLoopbackSamplesAvailable(byte[] samples, int bytesRecorded, int channels)
+    {
+        lock (_autoStopGate)
+            _autoStop.Observe(samples, bytesRecorded, channels, DateTimeOffset.UtcNow);
+    }
 
     private void CheckForLoopbackSilence(object? state)
     {
-        if (State != RecordingState.Recording || !_loopbackSilence.HasTimedOut(DateTimeOffset.UtcNow)) return;
-        StopAutoStopTimer();
+        lock (_autoStopGate)
+        {
+            if (State != RecordingState.Recording || !ReferenceEquals(state, _current)) return;
+            _autoStopNotice = _autoStop.Poll(DateTimeOffset.UtcNow);
+            if (!_autoStopNotice.ShouldStop) return;
+        }
         _ = Task.Run(async () =>
         {
-            try { await StopAndProcessAsync(); }
+            try { await StopAndProcessAsync(default, (Meeting?)state); }
             catch (Exception ex) { AudioWarning?.Invoke("Auto-stop could not finish processing the meeting. " + ex.Message); }
         });
     }
 
-    private void StopAutoStopTimer() => Interlocked.Exchange(ref _autoStopTimer, null)?.Dispose();
+    private void StopAutoStopTimer()
+    {
+        lock (_autoStopGate)
+        {
+            Interlocked.Exchange(ref _autoStopTimer, null)?.Dispose();
+            _autoStop.End();
+            _autoStopNotice = new(_settings.AutoStopEnabled, false, false);
+        }
+    }
 
     private async Task ProcessRecordingAsync(CancellationToken ct)
     {

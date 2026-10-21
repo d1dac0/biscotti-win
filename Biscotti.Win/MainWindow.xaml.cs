@@ -32,6 +32,7 @@ namespace Biscotti.Win
             _settings = designPreview ? new AppSettings() : AppSettings.Load();
             if (!designPreview) WhisperRuntimeConfigurator.Apply(_settings); // before any WhisperFactory is created
             _meetings = new MeetingService(_settings);
+            AutoStopBox.IsChecked = _settings.AutoStopEnabled;
             _meetings.StateChanged += (state, msg) => Dispatcher.Invoke(() =>
             {
                 if (state == RecordingState.Transcribing && _recording)
@@ -45,6 +46,7 @@ namespace Biscotti.Win
                 }
                 StatusText.Text = msg;
                 UpdateRecordingPresentation(state);
+                UpdateAutoStopNotice(state == RecordingState.Recording ? _meetings.AutoStopNotice : null);
                 UpdateDeviceControls();
                 if (state == RecordingState.Idle)
                 {
@@ -337,6 +339,7 @@ namespace Biscotti.Win
             else if (mic == 0) warning = "  ⚠ mic silent";
             else if (sys == 0) warning = "  ⚠ system audio not detected — is anything playing?";
             StatusText.Text = $"Recording health · mic {micMb} MB · speaker {sysMb} MB{warning} · {_meetings.SystemAudioStatus} · {_meetings.AutoStopStatus}";
+            UpdateAutoStopNotice(_meetings.AutoStopNotice);
             DeviceWarningText.Text = _meetings.RecordingDeviceWarning;
             DeviceWarningText.Visibility = string.IsNullOrEmpty(DeviceWarningText.Text) ? Visibility.Collapsed : Visibility.Visible;
         }

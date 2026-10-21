@@ -63,6 +63,13 @@
                     <Button Content="Open Windows microphone settings" Click="MicrophoneSettings_Click" HorizontalAlignment="Left" Margin="0,12,0,0"/>
                 </StackPanel>
             </Border>
+            <TextBlock Text="RECORDING AUTO-STOP" Style="{StaticResource SectionTitle}"/>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,24">
+                <StackPanel>
+                    <CheckBox x:Name="AutoStopBox" Content="Auto-stop after output silence"/>
+                    <TextBlock Text="After output audio is first heard, 5 quiet minutes starts a 30-second countdown. Keep recording cancels auto-stop for that recording. Quiet calls can trigger it; microphone-only meetings stay manual. App exit alone does not trigger stopping." Style="{StaticResource Hint}" Margin="0,8,0,0"/>
+                </StackPanel>
+            </Border>
             <TextBlock Text="RECORDING SHORTCUT" Style="{StaticResource SectionTitle}"/>
             <Border Style="{StaticResource Card}" Margin="0,0,0,24">
                 <StackPanel>
