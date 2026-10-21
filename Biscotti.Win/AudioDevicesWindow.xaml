@@ -1,11 +1,11 @@
 <Window x:Class="Biscotti.Win.AudioDevicesWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Icon="pack://application:,,,/Assets/biscotti.ico"
+        Icon="pack://application:,,,/Biscotti.Win;component/Assets/biscotti.ico"
         Title="Audio devices" Width="560" SizeToContent="Height"
-        ResizeMode="NoResize" WindowStartupLocation="CenterOwner" Background="#FAF9F6">
+        ResizeMode="NoResize" WindowStartupLocation="CenterOwner" Style="{StaticResource {x:Type Window}}">
     <StackPanel Margin="24">
-        <TextBlock Text="Audio devices" FontSize="22" FontWeight="SemiBold"/>
+        <TextBlock Text="Audio devices" Style="{StaticResource PageTitle}"/>
         <TextBlock Margin="0,8,0,16" TextWrapping="Wrap"
                    Text="Choose what Biscotti records. Device selection is available when no recording or processing is in progress."/>
         <StackPanel x:Name="DeviceChoices">
@@ -16,12 +16,12 @@
             <ComboBox x:Name="OutputBox" DisplayMemberPath="Name" MinHeight="32"
                       AutomationProperties.Name="Output device"/>
         </StackPanel>
-        <TextBlock x:Name="DeviceMessage" Margin="0,14,0,0" Foreground="#555"
+        <TextBlock x:Name="DeviceMessage" Margin="0,14,0,0" Foreground="{DynamicResource MutedBrush}"
                    TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
             <Button x:Name="RefreshButton" Content="Refresh" Padding="16,8" Click="Refresh_Click"/>
             <Button x:Name="SaveButton" Content="Save devices" Padding="16,8" Margin="8,0,0,0"
-                    IsDefault="True" Click="Save_Click"/>
+                    IsDefault="True" Click="Save_Click" Style="{StaticResource PrimaryButton}"/>
             <Button Content="Cancel" Padding="16,8" Margin="8,0,0,0" IsCancel="True"/>
         </StackPanel>
     </StackPanel>

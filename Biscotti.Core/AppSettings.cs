@@ -4,11 +4,17 @@ namespace Biscotti.Core;
 
 public sealed class AppSettings
 {
+    public bool AutoStopEnabled { get; set; } = true;
     public int? MicDeviceIndex { get; set; }
     public string? MicDeviceName { get; set; }
+    public string? MicDeviceEndpointId { get; set; }
     public string? SpeakerDeviceId { get; set; }
     public string? WhisperModelId { get; set; } = ModelStore.LargeV3Turbo.Id;
     public string? OllamaModel { get; set; } = "gemma3:4b";
+    public string SummaryLength { get; set; } = "standard";
+    public string? SummaryGuidance { get; set; }
+    /// <summary>Comma- or newline-separated names and terms to guide Whisper recognition.</summary>
+    public string? LocalVocabulary { get; set; }
     /// <summary>
     /// Transcription backend choice (issue #20): null until the first-run
     /// NVIDIA prompt decides, then "cpu" or "gpu". "gpu" only engages when
@@ -17,6 +23,12 @@ public sealed class AppSettings
     public string? WhisperRuntime { get; set; }
     /// <summary>Global Start/Stop shortcut (issue #18), such as Ctrl+Alt+R.</summary>
     public string? RecordingHotkey { get; set; } = "Ctrl+Alt+R";
+    /// <summary>Path to the user's local iCalendar export; no calendar contents are copied or uploaded.</summary>
+    public string? CalendarFilePath { get; set; }
+    /// <summary>Show a generic local-calendar notification near event start; off by default.</summary>
+    public bool CalendarStartNotifications { get; set; }
+    /// <summary>Show upcoming events and recent meetings in the tray menu.</summary>
+    public bool CalendarTrayNavigation { get; set; } = true;
 
     public string GetResolvedModelPath()
     {

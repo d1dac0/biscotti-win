@@ -1,5 +1,8 @@
 <Solution>
   <Project Path="Biscotti.Core/Biscotti.Core.csproj" />
+  <Project Path="Biscotti.Mcp/Biscotti.Mcp.csproj" />
   <Project Path="Biscotti.Tests/Biscotti.Tests.csproj" />
   <Project Path="Biscotti.Win/Biscotti.Win.csproj" />
+  <Project Path="Biscotti.Win.Tests/Biscotti.Win.Tests.csproj" />
+  <Project Path="tools/SpeakerEvaluation/SpeakerEvaluation.csproj" />
 </Solution>

@@ -1,30 +1,100 @@
 <Window x:Class="Biscotti.Win.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Icon="pack://application:,,,/Assets/biscotti.ico"
-        Title="Biscotti Win settings" Width="460" Height="245"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
-        PreviewKeyDown="Window_PreviewKeyDown">
-    <Grid Margin="24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-        <TextBlock Text="Recording shortcut" FontSize="18" FontWeight="SemiBold"/>
-        <StackPanel Grid.Row="1" Margin="0,14,0,0">
-            <TextBlock Text="Press the shortcut from anywhere to start or stop recording." TextWrapping="Wrap"/>
-            <DockPanel Margin="0,10,0,0">
-                <Button DockPanel.Dock="Right" x:Name="CaptureButton" Content="Record shortcut" Padding="12,5"
-                        Click="CaptureButton_Click"/>
-                <TextBox x:Name="ShortcutBox" IsReadOnly="True" VerticalContentAlignment="Center" Margin="0,0,8,0"/>
-            </DockPanel>
-            <TextBlock x:Name="MessageText" Margin="0,8,0,0" Foreground="#555" TextWrapping="Wrap"/>
+        Icon="pack://application:,,,/Biscotti.Win;component/Assets/biscotti.ico"
+        Title="Biscotti Win settings" Width="660" Height="780" MinWidth="480" MinHeight="420"
+        Style="{StaticResource {x:Type Window}}" WindowStartupLocation="CenterOwner" PreviewKeyDown="Window_PreviewKeyDown">
+    <Grid Margin="28">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel Margin="0,0,0,24">
+            <TextBlock Text="Settings" Style="{StaticResource PageTitle}"/>
+            <TextBlock Text="Make Biscotti work for your meetings. Preferences stay on this PC." Style="{StaticResource Hint}" Margin="0,8,0,0"/>
         </StackPanel>
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="Cancel" MinWidth="84" Margin="0,0,8,0" IsCancel="True"/>
-            <Button Content="Save" MinWidth="84" IsDefault="True" Click="SaveButton_Click"/>
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+            <TextBlock Text="LOCAL MODELS" Style="{StaticResource SectionTitle}"/>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,24">
+                <StackPanel>
+                    <TextBlock Text="Downloads need internet. Once installed, transcription and summaries run offline on this PC." Style="{StaticResource Hint}"/>
+                    <Label Content="_Transcription model" Target="{Binding ElementName=WhisperBox}"/>
+                    <ComboBox x:Name="WhisperBox" DisplayMemberPath="DisplayName" SelectionChanged="Model_SelectionChanged" AutomationProperties.Name="Transcription model"/>
+                    <TextBlock x:Name="WhisperStatus" Style="{StaticResource Hint}" Margin="0,8" AutomationProperties.LiveSetting="Polite"/>
+                    <ProgressBar x:Name="DownloadProgress" Height="8" Maximum="100" Visibility="Collapsed" AutomationProperties.Name="Settings download progress"/>
+                    <WrapPanel Margin="0,8">
+                        <Button x:Name="DownloadButton" Content="Download / retry model" Click="DownloadButton_Click" Margin="0,0,8,0"/>
+                        <Button x:Name="CancelDownloadButton" Content="Cancel download" Click="CancelDownload_Click" IsEnabled="False"/>
+                    </WrapPanel>
+                    <Label Content="Transcription _runtime" Target="{Binding ElementName=RuntimeBox}"/>
+                    <ComboBox x:Name="RuntimeBox" SelectedValuePath="Tag" AutomationProperties.Name="Transcription runtime">
+                        <ComboBoxItem Content="CPU (included)" Tag="cpu"/>
+                        <ComboBoxItem Content="NVIDIA GPU (optional download)" Tag="gpu"/>
+                    </ComboBox>
+                    <TextBlock Text="Runtime changes require restarting Biscotti. GPU uses CPU fallback when unavailable." Style="{StaticResource Hint}" Margin="0,8"/>
+                    <Button x:Name="GpuDownloadButton" Content="Download GPU runtime (~330 MB)" Click="GpuDownload_Click" HorizontalAlignment="Left"/>
+                    <Label Content="_Summary model installed in Ollama" Target="{Binding ElementName=OllamaBox}" Margin="0,12,0,0"/>
+                    <ComboBox x:Name="OllamaBox" SelectionChanged="Ollama_SelectionChanged" AutomationProperties.Name="Local summary model"/>
+                    <TextBlock x:Name="OllamaStatus" Style="{StaticResource Hint}" Margin="0,8" AutomationProperties.LiveSetting="Polite"/>
+                    <Button x:Name="RefreshModelsButton" Content="Check Ollama / retry" Click="RefreshModels_Click" HorizontalAlignment="Left"/>
+                    <TextBlock Text="Missing Ollama? Install Ollama for Windows from ollama.com, start it, then run: ollama pull gemma3:4b (about 3.3 GB). Pull progress and cancellation are in that terminal (Ctrl+C); rerun to retry. Then check again here. Choose a local model; cloud models are excluded." Style="{StaticResource Hint}" Margin="0,12,0,0"/>
+                </StackPanel>
+            </Border>
+            <TextBlock Text="SUMMARY PREFERENCES" Style="{StaticResource SectionTitle}"/>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,24">
+                <StackPanel>
+                    <Label Content="Summary _length" Target="{Binding ElementName=SummaryLengthBox}"/>
+                    <ComboBox x:Name="SummaryLengthBox" AutomationProperties.Name="Summary length"/>
+                    <Label Content="Extra summary _guidance (optional, up to 4,000 characters)" Target="{Binding ElementName=GuidanceBox}" Margin="0,8,0,0"/>
+                    <TextBox x:Name="GuidanceBox" MinHeight="80" MaxHeight="160" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Summary guidance"/>
+                    <TextBlock Text="Example: Focus on decisions, risks and next steps. Summary sections and action items are kept." Style="{StaticResource Hint}" Margin="0,8,0,0"/>
+                </StackPanel>
+            </Border>
+            <TextBlock Text="LOCAL CALENDAR" Style="{StaticResource SectionTitle}"/>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,24">
+                <StackPanel>
+                    <TextBlock Text="Biscotti reads the local .ics file you choose. Calendar data stays on this PC; no provider account or calendar upload is used." Style="{StaticResource Hint}" TextWrapping="Wrap"/>
+                    <CheckBox x:Name="CalendarNotificationsBox" Content="Show a generic notification shortly before an event" Margin="0,12,0,0" AutomationProperties.Name="Calendar start notifications"/>
+                    <TextBlock Text="Notifications contain no event title or details. Windows notification settings can still suppress them." Style="{StaticResource Hint}" Margin="24,4,0,0" TextWrapping="Wrap"/>
+                    <CheckBox x:Name="CalendarTrayBox" Content="Show upcoming events and recent meetings in the tray menu" Margin="0,12,0,0" AutomationProperties.Name="Calendar and recent tray navigation"/>
+                </StackPanel>
+            </Border>
+            <TextBlock Text="MICROPHONE ACCESS" Style="{StaticResource SectionTitle}"/>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,24">
+                <StackPanel>
+                    <TextBlock Text="If Windows denies microphone access, open Privacy settings and enable microphone access and access for desktop apps. Check the chosen device in Audio devices. Biscotti cannot grant permission for you." Style="{StaticResource Hint}"/>
+                    <Button Content="Open Windows microphone settings" Click="MicrophoneSettings_Click" HorizontalAlignment="Left" Margin="0,12,0,0"/>
+                </StackPanel>
+            </Border>
+            <TextBlock Text="RECORDING AUTO-STOP" Style="{StaticResource SectionTitle}"/>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,24">
+                <StackPanel>
+                    <CheckBox x:Name="AutoStopBox" Content="Auto-stop after output silence"/>
+                    <TextBlock Text="After output audio is first heard, 5 quiet minutes starts a 30-second countdown. Keep recording cancels auto-stop for that recording. Quiet calls can trigger it; microphone-only meetings stay manual. App exit alone does not trigger stopping." Style="{StaticResource Hint}" Margin="0,8,0,0"/>
+                </StackPanel>
+            </Border>
+            <TextBlock Text="RECORDING SHORTCUT" Style="{StaticResource SectionTitle}"/>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,24">
+                <StackPanel>
+                    <TextBlock Text="Start or stop recording from anywhere." Style="{StaticResource Hint}"/>
+                    <DockPanel Margin="0,12,0,0">
+                        <Button DockPanel.Dock="Right" x:Name="CaptureButton" Content="Record shortcut" Click="CaptureButton_Click"/>
+                        <TextBox x:Name="ShortcutBox" IsReadOnly="True" VerticalContentAlignment="Center" Margin="0,0,10,0" AutomationProperties.Name="Recording shortcut"/>
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+            <TextBlock Text="CUSTOM VOCABULARY" Style="{StaticResource SectionTitle}"/>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <Label Content="_Names and technical terms" Target="{Binding ElementName=VocabularyBox}" Padding="0,0,0,8"/>
+                    <TextBlock Text="Separate terms with commas or new lines to help Whisper recognize them." Style="{StaticResource Hint}" Margin="0,0,0,12"/>
+                    <TextBox x:Name="VocabularyBox" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" MinHeight="96" MaxHeight="160" AutomationProperties.Name="Custom vocabulary"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+        </ScrollViewer>
+        <TextBlock Grid.Row="2" x:Name="MessageText" Margin="0,12,0,0" Style="{StaticResource Hint}" Foreground="{DynamicResource DangerBrush}" AutomationProperties.LiveSetting="Polite"/>
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button Content="Cancel" MinWidth="84" Margin="0,0,10,0" IsCancel="True"/>
+            <Button x:Name="SaveButton" Content="Save" MinWidth="84" IsDefault="True" Style="{StaticResource PrimaryButton}" Click="SaveButton_Click"/>
         </StackPanel>
     </Grid>
 </Window>

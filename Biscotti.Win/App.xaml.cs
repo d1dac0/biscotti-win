@@ -28,6 +28,8 @@ public partial class App : System.Windows.Application
     private async void OnStartup(object sender, StartupEventArgs e)
     {
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        ThemePalette.Initialize();
+        if (DesignPreview.TryShow(e.Args)) return;
 
         _instanceMutex = new Mutex(initiallyOwned: true, MutexName, out _ownsInstanceMutex);
         if (!_ownsInstanceMutex)
@@ -44,12 +46,24 @@ public partial class App : System.Windows.Application
         _pipeListener = ListenForActivationAsync(_pipeCancellation.Token);
         RegisterNotifications();
 
-        _mainWindow = new MainWindow();
-        MainWindow = _mainWindow;
-        _mainWindow.InitializeShell();
-        if (_notificationError is not null) _mainWindow.SetShellStatus($"Windows notifications are unavailable: {_notificationError}");
-        _mainWindow.Closed += (_, _) => Shutdown();
-        _mainWindow.Show();
+        var mainWindow = new MainWindow();
+        _mainWindow = mainWindow;
+        MainWindow = mainWindow;
+        mainWindow.InitializeShell();
+        if (_notificationError is not null) mainWindow.SetShellStatus($"Windows notifications are unavailable: {_notificationError}");
+        mainWindow.Closed += async (_, _) =>
+        {
+            try
+            {
+                await mainWindow.DisposeForShutdownAsync();
+                await StopActivationListenerAsync();
+            }
+            finally
+            {
+                Shutdown();
+            }
+        };
+        mainWindow.Show();
     }
 
     private async Task<bool> SendActivationToExistingInstanceAsync()
@@ -86,13 +100,23 @@ public partial class App : System.Windows.Application
                     maxNumberOfServerInstances: 1,
                     transmissionMode: PipeTransmissionMode.Byte,
                     options: PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-                await server.WaitForConnectionAsync(cancellationToken);
+                await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
                 using var reader = new StreamReader(server, Encoding.UTF8, leaveOpen: true);
-                if (await reader.ReadLineAsync(cancellationToken) == "ACTIVATE")
+                if (await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false) == "ACTIVATE")
                     _ = Dispatcher.BeginInvoke(new Action(() => _mainWindow?.ShowFromShell()));
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
-            catch (IOException) when (!cancellationToken.IsCancellationRequested) { await Task.Delay(100, cancellationToken); }
+            catch (IOException) when (!cancellationToken.IsCancellationRequested) { await Task.Delay(100, cancellationToken).ConfigureAwait(false); }
+        }
+    }
+
+    private async Task StopActivationListenerAsync()
+    {
+        _pipeCancellation?.Cancel();
+        if (_pipeListener is not null)
+        {
+            try { await _pipeListener; }
+            catch (OperationCanceledException) { }
         }
     }
 
@@ -119,8 +143,8 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        ThemePalette.Dispose();
         _pipeCancellation?.Cancel();
-        try { _pipeListener?.GetAwaiter().GetResult(); } catch (OperationCanceledException) { }
         _pipeCancellation?.Dispose();
 
         if (_notificationsRegistered)

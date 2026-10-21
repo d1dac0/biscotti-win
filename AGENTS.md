@@ -36,8 +36,9 @@ a pull request (see Git). Never work directly on `main`.
    the branch. If another agent already claimed it, coordinate in the issue
    instead of starting parallel work.
 3. **Plan the change** before writing code. Small tasks: a short list of steps
-   is enough. Larger tasks: write the plan down and have the user approve it
-   before touching code. A load-bearing decision is written in `docs/specs/`
+   is enough. Larger tasks: write the plan down, then proceed within the
+   user's authorized scope without a separate plan-approval step.
+   A load-bearing decision is written in `docs/specs/`
    before building on it.
 4. **Write the code** in small, focused commits.
 5. **Verify it before closing:** run `tools/build.ps1` and `tools/check.ps1`,
@@ -45,6 +46,11 @@ a pull request (see Git). Never work directly on `main`.
 6. **Commit, push and open a pull request** with `Fixes #N`, one `type:*`, one
    `priority:*`, relevant `area:*` labels (see `.github/labels.json`), then
    merge on green CI.
+   After opening the PR, keep monitoring every required CI check, deployment,
+   and approval through completion. Do not end the turn while any is pending.
+   If checks pass, merge per policy and verify the PR is merged and the linked
+   issue is closed. If a check fails, fix it and rerun; if human action is
+   required, hand over the exact blocker and leave the issue open.
 7. **Stop and hand over.** End the turn with:
    - first line: what changed, the issue, the PR link, the merged commit hash;
    - how to try it: the exact command and what to look for;
@@ -57,6 +63,9 @@ a pull request (see Git). Never work directly on `main`.
 
 ## How to work with the user
 
+- **Keep the session title current.** When starting new work or switching to a
+  different issue or task, update the session title to name the work currently
+  underway. Keep it concise and revise it when the active work changes.
 - **The user decides; the agent recommends.** Every question carries exactly
   one recommended option with a one-line why, so the user can make the call or
   override. Never a neutral listing, never a silent decision.
@@ -113,6 +122,9 @@ git worktree add .worktrees/issue-N -b issue-N-slug
   NVIDIA GPU), and new behavior rides with test additions in the same PR.
 - A change is not done until the build, the check, and a manual look at the
   result pass (launch the app for UI-affecting changes).
+- Whenever a human test is needed, run `dotnet run --project Biscotti.Win`
+  from the repository root, then give the user the full path to the generated
+  `Biscotti.Win.exe`. Use the actual path reported by the build; do not guess it.
 
 ## Data and configuration
 

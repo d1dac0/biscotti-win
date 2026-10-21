@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "./.cursor/hooks/engram-brief.sh cursor"
+      }
+    ]
+  },
+  "version": 1
+}

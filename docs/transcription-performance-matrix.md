@@ -1,9 +1,10 @@
 # Transcription performance matrix (issue #20)
 
 Purpose: measured Whisper `large-v3-turbo` realtime factors so the app can set
-accurate user-facing speed expectations. Realtime factor = seconds of audio /
-seconds of transcription wall-clock. All rows below use one fixed WAV file
-(see "Standard input").
+accurate user-facing speed expectations. Realtime factor (RTF) = seconds of
+audio / seconds of transcription wall-clock; an RTF above 1 means more than one
+second of audio is transcribed per wall-clock second. All measured rows below
+use one fixed WAV file (see "Standard input").
 
 ## Standard input
 
@@ -16,21 +17,22 @@ seconds of transcription wall-clock. All rows below use one fixed WAV file
 
 | Runtime                  | Hardware                                       |     RTF | Wall time for 289.8 s audio |
 |--------------------------|------------------------------------------------|--------:|----------------------------:|
-| CPU (Whisper.net.Runtime 1.9.0) | Ryzen 9 5900HX, 8 cores / 16 threads    | **1.38×** |                     208.6 s |
+| CPU (Whisper.net.Runtime 1.9.0) | Ryzen 9 5900HX, 8 cores / 16 threads    | **1.39×** |                     208.6 s |
 | CUDA (Whisper.net.Runtime.Cuda.Windows 1.9.0 + NVIDIA CUDA 13.1 redist) | RTX 3080 16 GB, driver 591.59 | **75.7×** | 3.83 s |
 
-Implication used in the UI: on an 8-core CPU, expect roughly real-time
-transcription (a 60-minute meeting takes a bit over an hour); on a modern
-RTX GPU, transcription finishes almost immediately after Stop.
+Applying each measured factor to 60 minutes of audio gives about 43 minutes
+11 seconds on the tested Ryzen 9 5900HX CPU and 48 seconds on the tested RTX
+3080. These are projections from the single fixture above, not guarantees for
+other hardware, models, or meetings. Recalculate with the same formula using
+`tools/calculate-rtf.ps1` when adding measurements.
 
 ## Pending measurements (not re-run on this repo's hardware yet)
 
-The issue's original matrix rows for an Intel/AMD iGPU and an RTX 3060 are
-pending because this repo's primary machine has no such hardware. Community
-point of reference until then: the RTX 3060 typically lands in the same
-order-of-magnitude as the RTX 3080 tier (tens× RTF for large-v3-turbo), iGPU
-rows behave closer to the CPU tier. Re-run the harness and update this table;
-do not publish expectations from guesses alone.
+The issue's original matrix rows for an Intel/AMD iGPU and an RTX 3060 remain
+pending because this repo's primary machine has no such hardware. Do not infer
+or publish performance expectations for those tiers from community estimates.
+Re-run the same fixture harness on each target system and record its hardware,
+runtime, model, and wall time before adding a measured row.
 
 ## How the GPU tier is assembled (all lazy, nothing vendored)
 

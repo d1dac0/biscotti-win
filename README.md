@@ -21,38 +21,76 @@ Biscotti Win stays available from the notification area. Closing the main window
 
 ```powershell
 dotnet build -c Release
-Biscotti.Win\bin\Release\net9.0-windows\Biscotti.Win.exe
+Biscotti.Win\bin\Release\net10.0-windows10.0.17763.0\win-x64\Biscotti.Win.exe
 ```
 
 ## Requirements
 
 - Windows 10/11 with a microphone
-- .NET 9 SDK (to build)
+- .NET 10 SDK (to build)
 - Optional: [Ollama](https://ollama.com) installed with `ollama pull gemma3:4b` for AI summaries
+
+## Install a release
+
+Windows release ZIP install, update, uninstall, and retained-data steps are in
+[the Windows release guide](docs/windows-release.md).
 
 ## Data location
 
 Everything is stored under `%LOCALAPPDATA%\BiscottiWin`:
 
-- `Meetings\<guid>\meeting.json` — structured transcript, summary, notes
-- `Meetings\<guid>\meeting.md` — human-readable copy
+- `Meetings\<guid>\meeting.json` — DPAPI-protected structured transcript, summary, notes
+- `Meetings\<guid>\meeting.md` — DPAPI-protected Markdown rendering
 - `Meetings\<guid>\mic.wav` / `sys.wav` — full audio, yours to delete
 - `Models\` — Whisper GGML model
 
-Meeting files are currently stored as plaintext. The accepted design for issue
-#17 protects `meeting.json` and `meeting.md` with Windows DPAPI for the current
-user in the release that implements it; existing meetings are migrated without
-deleting their source files until each protected replacement is verified. WAV
-audio remains plaintext in that first phase. DPAPI CurrentUser does not protect
-data from software already running as your Windows user. See the
+`meeting.json` and `meeting.md` are protected with Windows DPAPI for the current
+user; older plaintext meeting files are migrated after each protected copy is
+verified. `mic.wav` and `sys.wav` use authenticated AES-GCM containers with a
+DPAPI-protected meeting key. DPAPI CurrentUser does not protect data from
+software already running as your Windows user. See the
 [DPAPI storage decision](docs/specs/dpapi-meeting-data-at-rest.md) for migration,
-profile roaming, password-reset behavior, and the follow-up WAV design.
+profile roaming, and password-reset behavior.
 
-## Roadmap (from Biscotti feature parity)
+## Chat with local meetings
 
-- Windows calendar awareness (offer to record before a meeting starts)
-- Voiceprint cross-meeting speaker matching (real per-person names)
-- Auto-stop when the call ends
-- Custom vocabulary
-- Markdown-notes linked to the moment they happened
-- MCP server to chat with your meeting notes
+Biscotti includes a read-only MCP server that lets compatible local MCP clients
+search saved meetings, read meeting details, and page through timestamped,
+speaker-labeled transcripts. The server reads the same DPAPI-protected local
+`meeting.json` files through the app's storage boundary and does not open audio
+files or contact remote services.
+See [the MCP setup guide](docs/mcp-server.md) for build and client configuration.
+
+## Remote speaker labels
+
+After recording, Biscotti locally groups remote transcript segments using
+speaker embeddings. Labels are best effort: short or unusable segments keep
+their fallback labels, and overlapping speech is not separated. A speaker may
+also receive more than one cluster label. Biscotti can replace a cluster label
+with a real name only when that speaker introduces themselves in the transcript.
+The first processed meeting downloads the 26.5 MB English speaker model into
+the local model cache; no meeting audio is uploaded. See
+[third-party notices](docs/THIRD-PARTY-NOTICES.md) for model attribution.
+The measured scope and limitations are in the
+[speaker-clustering evaluation](docs/speaker-clustering-evaluation.md).
+
+## Feature parity and UI preview
+
+Windows already includes local .ics upcoming meetings, silence-based auto-stop,
+custom vocabulary and timestamped notes. They differ from the Mac workflows;
+the [source-backed parity review](docs/mac-feature-parity-review.md) records
+the coverage and linked follow-ups for calendar prompts, speaker identity,
+history search, export, recovery and richer note/audio navigation.
+
+To inspect the UI with synthetic meetings and no recording, model download or
+profile-data access, run from the repository root:
+
+```powershell
+dotnet run --project Biscotti.Win -- --design-preview=history
+```
+
+Other preview states: `setup`, `empty`, `recording`, `processing`, `failure`,
+`review`, `tray`. The preview uses the real WPF screens with in-memory Atlas
+sample data; saving/deleting cannot modify your meetings. Close the preview
+windows when finished. [Annotated visual comparisons](docs/parity-evidence/comparison.html)
+label Mac source diagrams separately from Windows runtime captures.

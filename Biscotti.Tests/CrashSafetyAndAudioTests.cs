@@ -2,9 +2,13 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Biscotti.Core.Audio;
 using Biscotti.Core.Models;
 using Biscotti.Core.Storage;
+using Biscotti.Mcp;
 using Xunit;
 
 namespace Biscotti.Tests;
@@ -92,6 +96,21 @@ public class AudioPipelineTests
     }
 
     [Fact]
+    public void AecMicrophoneFloatPath_MonoCaptureKeepsSixteenKhzTiming()
+    {
+        var input = Enumerable.Range(0, InRate)
+            .SelectMany(i => BitConverter.GetBytes((float)(0.5 * Math.Sin(2 * Math.PI * 1000 * i / InRate))))
+            .ToArray();
+        var decimator = new AntiAliasDecimator(InRate);
+
+        var pcm = decimator.ProcessFloat(input, input.Length, 1);
+        var samples = ToShorts(pcm);
+
+        Assert.InRange(samples.Length, OutRate - 2, OutRate + 2);
+        Assert.True(GoertzelPower(samples, 1000, OutRate) > Math.Sqrt(samples.Average(s => (double)s * s)) * 0.5);
+    }
+
+    [Fact]
     public void Int16Path_MicFallback_ConvertsCorrectly()
     {
         var decimator = new AntiAliasDecimator(InRate);
@@ -113,6 +132,39 @@ public class AudioPipelineTests
         var samples = ToShorts(pcm);
         var expected = seconds * OutRate;
         Assert.InRange(samples.Length, expected - 4, expected + 4);
+    }
+
+    [Fact]
+    public void EchoLeakageAnalyzer_FindsDelayedSyntheticSpeakerLeakage()
+    {
+        const int delay = 73;
+        const double gain = 0.25;
+        var reference = Enumerable.Range(0, 4000).Select(i =>
+            (float)(0.45 * Math.Sin(2 * Math.PI * 440 * i / OutRate)
+                + 0.2 * Math.Sin(2 * Math.PI * 997 * i / OutRate))).ToArray();
+        var microphone = new float[reference.Length + delay];
+        for (var i = 0; i < reference.Length; i++) microphone[i + delay] = (float)(reference[i] * gain);
+
+        var measurement = EchoLeakageAnalyzer.Measure(reference, microphone, 160);
+
+        Assert.Equal(delay, measurement.DelaySamples);
+        Assert.InRange(measurement.Gain, gain - 0.001, gain + 0.001);
+        Assert.InRange(measurement.Correlation, 0.999, 1.0);
+        Assert.InRange(measurement.GainDecibels, -12.05, -12.0);
+    }
+
+    [Fact]
+    public void EchoLeakageAnalyzer_DistinguishesSyntheticHeadphoneAndSpeakerLeakage()
+    {
+        var reference = Enumerable.Range(0, 3000)
+            .Select(i => (float)(0.5 * Math.Sin(2 * Math.PI * 700 * i / OutRate))).ToArray();
+        var speakerMic = reference.Select(sample => sample * 0.2f).ToArray();
+        var headphoneMic = reference.Select(sample => sample * 0.002f).ToArray();
+
+        var speaker = EchoLeakageAnalyzer.Measure(reference, speakerMic, 0);
+        var headphones = EchoLeakageAnalyzer.Measure(reference, headphoneMic, 0);
+
+        Assert.True(speaker.GainDecibels - headphones.GainDecibels > 39);
     }
 }
 
@@ -185,6 +237,7 @@ public class CrashSafetyTests
             meeting.StartedUtc = DateTime.UtcNow;
             meeting.Title = "Crash safety roundtrip";
             meeting.Transcript.Add(new TranscriptLine { Speaker = "You", Text = "hello", StartSeconds = 0.5, EndSeconds = 1.3 });
+            meeting.TimestampedNotes.Add(new TimestampedMeetingNote { Text = "Follow up on this", StartSeconds = 0.2 });
             MeetingStore.Save(meeting);
 
             var loaded = MeetingStore.LoadAll();
@@ -193,10 +246,259 @@ public class CrashSafetyTests
             Assert.Equal("Crash safety roundtrip", match!.Title);
             Assert.Single(match.Transcript);
             Assert.Equal("You", match.Transcript[0].Speaker);
+            Assert.Single(match.TimestampedNotes);
+            Assert.Equal("Follow up on this", match.TimestampedNotes[0].Text);
+            var markdownPath = Path.Combine(MeetingStore.MeetingDir(meeting.Id), "meeting.md");
+            var markdownFile = File.ReadAllBytes(markdownPath);
+            Assert.True(markdownFile.AsSpan().StartsWith("BISCOTTI-DPAPI:1\n"u8));
+            Assert.DoesNotContain("Follow up on this", Encoding.UTF8.GetString(markdownFile), StringComparison.Ordinal);
+            var jsonFile = File.ReadAllBytes(Path.Combine(MeetingStore.MeetingDir(meeting.Id), "meeting.json"));
+            Assert.True(jsonFile.AsSpan().StartsWith("BISCOTTI-DPAPI:1\n"u8));
+            Assert.DoesNotContain("Crash safety roundtrip", Encoding.UTF8.GetString(jsonFile), StringComparison.Ordinal);
+            var markdownBytes = ProtectedMeetingText.ReadAndMigrate(markdownPath);
+            var markdown = Encoding.UTF8.GetString(markdownBytes);
+            CryptographicOperations.ZeroMemory(markdownBytes);
+            Assert.True(markdown.IndexOf("**Note**: Follow up on this", StringComparison.Ordinal)
+                < markdown.IndexOf("**You**: hello", StringComparison.Ordinal));
             // no temp leftovers
             Assert.Empty(Directory.GetFiles(MeetingStore.MeetingDir(meeting.Id), "*.tmp"));
             // markdown copy generated
             Assert.True(File.Exists(Path.Combine(MeetingStore.MeetingDir(meeting.Id), "meeting.md")));
+        }
+        finally
+        {
+            var dir = MeetingStore.RootOverride!;
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            MeetingStore.RootOverride = null;
+        }
+    }
+
+    [Fact]
+    public void MeetingStore_MigratesLegacyJsonAndMarkdownIndependently()
+    {
+        MeetingStore.RootOverride = Path.Combine(Path.GetTempPath(), $"biscotti-text-migrate-{Guid.NewGuid()}");
+        ProtectedMeetingText.ProtectorOverride = new PrefixMeetingTextProtector();
+        try
+        {
+            var meeting = new Meeting { StartedUtc = DateTime.UtcNow, Title = "Legacy meeting" };
+            meeting.Transcript.Add(new TranscriptLine { Speaker = "You", Text = "private words", StartSeconds = 1, EndSeconds = 2 });
+            var dir = MeetingStore.MeetingDir(meeting.Id);
+            Directory.CreateDirectory(dir);
+            var jsonPath = Path.Combine(dir, "meeting.json");
+            var markdownPath = Path.Combine(dir, "meeting.md");
+            var json = JsonSerializer.SerializeToUtf8Bytes(meeting, new JsonSerializerOptions { WriteIndented = true });
+            var markdown = Encoding.UTF8.GetBytes("# User-edited legacy note\n\nprivate words\n");
+            File.WriteAllBytes(jsonPath, json);
+            File.WriteAllBytes(markdownPath, markdown);
+
+            var loaded = Assert.Single(MeetingStore.LoadMetadataOnly());
+
+            Assert.Equal(meeting.Id, loaded.Id);
+            Assert.True(File.ReadAllBytes(jsonPath).AsSpan().StartsWith("BISCOTTI-DPAPI:1\n"u8));
+            Assert.True(File.ReadAllBytes(markdownPath).AsSpan().StartsWith("BISCOTTI-DPAPI:1\n"u8));
+            Assert.Equal(markdown, ProtectedMeetingText.ReadAndMigrate(markdownPath));
+            CryptographicOperations.ZeroMemory(json);
+            CryptographicOperations.ZeroMemory(markdown);
+        }
+        finally
+        {
+            var dir = MeetingStore.RootOverride!;
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            MeetingStore.RootOverride = null;
+            ProtectedMeetingText.ProtectorOverride = null;
+        }
+    }
+
+    [Fact]
+    public void MeetingStore_DoesNotTreatTamperedProtectedJsonAsPlaintextOrSkipIt()
+    {
+        MeetingStore.RootOverride = Path.Combine(Path.GetTempPath(), $"biscotti-text-tamper-{Guid.NewGuid()}");
+        ProtectedMeetingText.ProtectorOverride = new PrefixMeetingTextProtector();
+        try
+        {
+            var meeting = new Meeting { StartedUtc = DateTime.UtcNow, Title = "Protected meeting" };
+            MeetingStore.Save(meeting);
+            var jsonPath = Path.Combine(MeetingStore.MeetingDir(meeting.Id), "meeting.json");
+            var stored = File.ReadAllBytes(jsonPath);
+            stored[^1] ^= 0xFF;
+            File.WriteAllBytes(jsonPath, stored);
+
+            var error = Assert.Throws<MeetingTextStorageException>(() => MeetingStore.LoadMetadataOnly());
+            Assert.Throws<MeetingTextStorageException>(() => new MeetingQueryService().SearchMeetings("Protected"));
+            Assert.Throws<MeetingTextStorageException>(() => Biscotti.Core.MeetingHistorySearch.Search(
+                MeetingStore.LoadAll().Select(Biscotti.Core.MeetingSearchDocument.FromMeeting), "Protected"));
+
+            Assert.Contains("unprotect", error.Message);
+            Assert.Equal(stored, File.ReadAllBytes(jsonPath));
+        }
+        finally
+        {
+            var dir = MeetingStore.RootOverride!;
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            MeetingStore.RootOverride = null;
+            ProtectedMeetingText.ProtectorOverride = null;
+        }
+    }
+
+    [Fact]
+    public void MeetingStore_PreservesUnknownProtectedMarkdownVersion()
+    {
+        MeetingStore.RootOverride = Path.Combine(Path.GetTempPath(), $"biscotti-text-version-{Guid.NewGuid()}");
+        ProtectedMeetingText.ProtectorOverride = new PrefixMeetingTextProtector();
+        try
+        {
+            var dir = Path.Combine(MeetingStore.Root, Guid.NewGuid().ToString());
+            Directory.CreateDirectory(dir);
+            var markdownPath = Path.Combine(dir, "meeting.md");
+            var original = Encoding.UTF8.GetBytes("BISCOTTI-DPAPI:2\nfuture protected bytes");
+            File.WriteAllBytes(markdownPath, original);
+
+            var error = Assert.Throws<MeetingTextStorageException>(() => ProtectedMeetingText.ReadAndMigrate(markdownPath));
+
+            Assert.Contains("unsupported DPAPI envelope version", error.Message);
+            Assert.Equal(original, File.ReadAllBytes(markdownPath));
+        }
+        finally
+        {
+            var dir = MeetingStore.RootOverride!;
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            MeetingStore.RootOverride = null;
+            ProtectedMeetingText.ProtectorOverride = null;
+        }
+    }
+
+    [Fact]
+    public void MeetingStore_PreservesLegacyJsonWhenProtectedReplacementCannotBeVerified()
+    {
+        MeetingStore.RootOverride = Path.Combine(Path.GetTempPath(), $"biscotti-text-failure-{Guid.NewGuid()}");
+        ProtectedMeetingText.ProtectorOverride = new PrefixMeetingTextProtector(failUnprotect: true);
+        try
+        {
+            var meeting = new Meeting { StartedUtc = DateTime.UtcNow, Title = "Readable legacy data" };
+            var dir = MeetingStore.MeetingDir(meeting.Id);
+            Directory.CreateDirectory(dir);
+            var jsonPath = Path.Combine(dir, "meeting.json");
+            var original = JsonSerializer.SerializeToUtf8Bytes(meeting);
+            File.WriteAllBytes(jsonPath, original);
+
+            var error = Assert.Throws<MeetingTextStorageException>(() => MeetingStore.LoadMetadataOnly());
+
+            Assert.Contains("unprotect", error.Message);
+            Assert.Equal(original, File.ReadAllBytes(jsonPath));
+            Assert.False(File.Exists(jsonPath + ".tmp"));
+        }
+        finally
+        {
+            var dir = MeetingStore.RootOverride!;
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            MeetingStore.RootOverride = null;
+            ProtectedMeetingText.ProtectorOverride = null;
+        }
+    }
+
+    private sealed class PrefixMeetingTextProtector(bool failUnprotect = false) : IMeetingTextProtector
+    {
+        private const byte Prefix = 0xA5;
+
+        public byte[] Protect(byte[] plaintext) => [Prefix, .. SHA256.HashData(plaintext), .. plaintext];
+
+        public byte[] Unprotect(byte[] ciphertext)
+        {
+            if (failUnprotect || ciphertext.Length < 33 || ciphertext[0] != Prefix)
+                throw new CryptographicException("Test unprotect failure.");
+            var plaintext = ciphertext[33..];
+            if (!CryptographicOperations.FixedTimeEquals(ciphertext.AsSpan(1, 32), SHA256.HashData(plaintext)))
+                throw new CryptographicException("Test protected content was tampered with.");
+            return plaintext;
+        }
+    }
+
+    [Fact]
+    public void MeetingStore_RenderMarkdown_InterleavesTimestampedNotesAndTranscript()
+    {
+        var meeting = new Meeting { Title = "Timeline" };
+        meeting.TimestampedNotes.Add(new TimestampedMeetingNote { Text = "decision", StartSeconds = 4 });
+        meeting.Transcript.Add(new TranscriptLine { Speaker = "You", Text = "start", StartSeconds = 1, EndSeconds = 2 });
+        meeting.Transcript.Add(new TranscriptLine { Speaker = "Speaker", Text = "response", StartSeconds = 6, EndSeconds = 7 });
+
+        var markdown = MeetingStore.RenderMarkdown(meeting);
+        var start = markdown.IndexOf("**You**: start", StringComparison.Ordinal);
+        var note = markdown.IndexOf("**Note**: decision", StringComparison.Ordinal);
+        var response = markdown.IndexOf("**Speaker**: response", StringComparison.Ordinal);
+
+        Assert.True(start >= 0 && start < note && note < response);
+    }
+
+    [Fact]
+    public void MeetingStore_LoadMetadataOnly_DoesNotMigrateLegacyAudio()
+    {
+        MeetingStore.RootOverride = Path.Combine(Path.GetTempPath(), $"biscotti-mcp-metadata-{Guid.NewGuid()}");
+        try
+        {
+            var meeting = new Meeting { StartedUtc = DateTime.UtcNow, Title = "Metadata only" };
+            MeetingStore.Save(meeting);
+            var audioPath = Path.Combine(MeetingStore.MeetingDir(meeting.Id), "mic.wav");
+            File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "test-meeting-16k.wav"), audioPath);
+
+            var loaded = MeetingStore.LoadMetadataOnly();
+
+            Assert.Equal(meeting.Id, Assert.Single(loaded).Id);
+            Assert.False(EncryptedAudioFile.IsEncrypted(audioPath));
+            Assert.False(File.Exists(audioPath + ".enc-migrate"));
+        }
+        finally
+        {
+            var dir = MeetingStore.RootOverride!;
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            MeetingStore.RootOverride = null;
+        }
+    }
+
+    [Fact]
+    public void MeetingQueryService_SearchesMeetingsAndPagesTranscript()
+    {
+        var id = Guid.NewGuid();
+        var meeting = new Meeting
+        {
+            Id = id,
+            StartedUtc = DateTime.UtcNow,
+            Title = "Quarterly launch",
+            Summary = "Review the release checklist.",
+        };
+        meeting.Transcript.Add(new TranscriptLine { Speaker = "You", Text = "Budget is approved", StartSeconds = 2, EndSeconds = 3 });
+        meeting.Transcript.Add(new TranscriptLine { Speaker = "Speaker 1", Text = "We can ship Friday", StartSeconds = 8, EndSeconds = 9 });
+        var queries = new MeetingQueryService(() => new List<Meeting> { meeting });
+
+        var search = queries.SearchMeetings("budget");
+        var details = queries.GetMeeting(id.ToString());
+        var firstPage = queries.GetTranscript(id.ToString(), offset: 0, limit: 1);
+        var secondPage = queries.GetTranscript(id.ToString(), offset: 1, limit: 1);
+
+        Assert.Equal(1, search.TotalMatches);
+        Assert.Equal(id, Assert.Single(search.Meetings).Id);
+        Assert.True(details.Found);
+        Assert.Equal("Quarterly launch", details.Meeting!.Title);
+        Assert.True(firstPage.HasMore);
+        Assert.Equal("You", Assert.Single(firstPage.Lines!).Speaker);
+        Assert.False(secondPage.HasMore);
+        Assert.Equal("Speaker 1", Assert.Single(secondPage.Lines!).Speaker);
+        Assert.Equal(8, secondPage.Lines![0].StartSeconds);
+    }
+
+    [Fact]
+    public async Task MeetingStore_LoadAllAsync_ReturnsSavedMeetings()
+    {
+        MeetingStore.RootOverride = Path.Combine(Path.GetTempPath(), $"biscotti-test-{Guid.NewGuid()}");
+        try
+        {
+            var meeting = new Meeting { StartedUtc = DateTime.UtcNow, Title = "Async startup load" };
+            MeetingStore.Save(meeting);
+
+            var loaded = await MeetingStore.LoadAllAsync();
+
+            var match = Assert.Single(loaded);
+            Assert.Equal(meeting.Id, match.Id);
+            Assert.Equal(meeting.Title, match.Title);
         }
         finally
         {
