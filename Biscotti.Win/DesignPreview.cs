@@ -33,9 +33,9 @@ internal static class DesignPreview
         var argument = args.FirstOrDefault(a => a == "--design-preview" || a.StartsWith("--design-preview=", StringComparison.Ordinal));
         if (argument is null) return false;
         var mode = argument.Contains('=') ? argument.Split('=', 2)[1] : "history";
-        if (!new[] { "setup", "empty", "history", "recording", "countdown", "processing", "failure", "review", "transfer", "speakers", "recovery", "tray", "calendar" }.Contains(mode))
+        if (!new[] { "setup", "empty", "history", "recording", "countdown", "processing", "failure", "review", "notes", "transfer", "speakers", "recovery", "tray", "calendar" }.Contains(mode))
         {
-            MessageBox.Show("Preview states: setup, empty, history, recording, countdown, processing, failure, review, transfer, speakers, recovery, tray, calendar.", "Design preview");
+            MessageBox.Show("Preview states: setup, empty, history, recording, countdown, processing, failure, review, notes, transfer, speakers, recovery, tray, calendar.", "Design preview");
             System.Windows.Application.Current.Shutdown();
             return true;
         }
@@ -54,6 +54,14 @@ internal static class DesignPreview
             window.UpdateAutoStopNotice(new Biscotti.Core.Audio.AutoStopNotice(true, true, false, 30));
         }
         if (mode == "review") new MeetingWindow(CreateMeeting(), designPreview: true) { Owner = window }.Show();
+        if (mode == "notes")
+        {
+            var fixture = CreateMeeting();
+            fixture.Notes += "\n\n**Decision:** review the [checklist](biscotti://time/38).\n\n[External reference](https://example.invalid) stays inert.";
+            var review = new MeetingWindow(fixture, designPreview: true) { Owner = window };
+            review.Show();
+            ((TabControl)review.FindName("ReviewTabs")).SelectedItem = review.FindName("NotesTab");
+        }
         if (mode == "recovery")
         {
             var interrupted = CreateMeeting();

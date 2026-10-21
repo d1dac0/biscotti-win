@@ -18,7 +18,7 @@
             <TextBox x:Name="TitleBox" FontSize="28" FontFamily="Georgia"
                      Background="Transparent" BorderThickness="0"
                      AutomationProperties.Name="Meeting title"
-                     Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}"/>
+                     TextChanged="Edit_Changed"/>
             <TextBlock x:Name="LiveStatus" Text="Recording · transcript updates as speech is recognized"
                        Foreground="{DynamicResource DangerBrush}" FontSize="13" Margin="0,8,0,8"
                        Visibility="Collapsed" AutomationProperties.LiveSetting="Polite"/>
@@ -50,7 +50,18 @@
                     <ItemsControl x:Name="TranscriptList" ItemsSource="{Binding Transcript}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Padding="12,10" Margin="0,0,0,8" Background="{DynamicResource WashBrush}" CornerRadius="4">
+                                <Border Padding="12,10" Margin="0,0,0,8" Background="{DynamicResource WashBrush}" CornerRadius="4" Focusable="True">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderThickness" Value="2"/>
+                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
                                     <StackPanel>
                                         <TextBlock Foreground="{DynamicResource MutedBrush}" FontFamily="Consolas" FontSize="12" Margin="0,0,0,6">
                                             <Run Text="{Binding Speaker, Mode=OneWay}"/>
@@ -74,7 +85,7 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <TextBlock x:Name="SummaryEmptyText" Style="{StaticResource Hint}" Margin="8,0,8,12" Text="No summary yet. Summaries need Ollama running locally with your configured model." Visibility="Collapsed"/>
-                <TextBox x:Name="SummaryBox" Grid.Row="1" Text="{Binding Summary, UpdateSourceTrigger=PropertyChanged}"
+                <TextBox x:Name="SummaryBox" Grid.Row="1" TextChanged="Edit_Changed"
                              AutomationProperties.Name="Meeting summary"
                              AcceptsReturn="True" TextWrapping="Wrap" Background="Transparent"
                              BorderThickness="0" FontSize="15"
@@ -108,28 +119,48 @@
                                        Style="{StaticResource Hint}" AutomationProperties.LiveSetting="Polite"/>
                         </StackPanel>
                     </StackPanel>
-                    <ScrollViewer x:Name="TimestampedNotesScroller" Grid.Row="1" MaxHeight="220" VerticalScrollBarVisibility="Auto">
+                    <Expander x:Name="TimestampedNotesExpander" Grid.Row="1" Header="Timestamped notes" Margin="0,0,0,8">
+                    <ScrollViewer x:Name="TimestampedNotesScroller" MaxHeight="160" VerticalScrollBarVisibility="Auto">
                         <ItemsControl x:Name="TimestampedNotesList">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border Padding="12,10" Margin="0,0,0,8" Background="{DynamicResource WashBrush}" CornerRadius="4">
-                                        <TextBlock TextWrapping="Wrap">
-                                            <Run Text="{Binding StartSeconds, Converter={StaticResource SecToTime}, Mode=OneWay}"/>
-                                            <Run Text="  "/>
-                                            <Run Text="{Binding Text, Mode=OneWay}"/>
-                                        </TextBlock>
+                                        <StackPanel>
+                                            <Button Content="{Binding StartSeconds, Converter={StaticResource SecToTime}}"
+                                                    Tag="{Binding StartSeconds}" Click="Timestamp_Click" HorizontalAlignment="Left"
+                                                    ToolTip="Go to this time in the transcript"/>
+                                            <TextBox x:Name="TimestampNoteText" Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}"
+                                                     IsReadOnly="{Binding IsReadOnly, ElementName=NotesBox}"
+                                                     TextChanged="TimestampEdit_Changed" AcceptsReturn="True" TextWrapping="Wrap"
+                                                     AutomationProperties.Name="Timestamped note Markdown" Margin="0,6,0,0"/>
+                                            <local:SafeMarkdownView Markdown="{Binding Text, ElementName=TimestampNoteText}"
+                                                                    TimestampRequested="Markdown_TimestampRequested" MaxHeight="150"/>
+                                        </StackPanel>
                                     </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
-                    <GroupBox Grid.Row="2" Header="Your Markdown notes" Margin="0,12,0,0" Padding="8">
-                    <TextBox x:Name="NotesBox" Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}"
-                             AutomationProperties.Name="Meeting notes in Markdown" ToolTip="Write your notes in Markdown. Changes are kept when you choose Save."
+                    </Expander>
+                    <Grid Grid.Row="2" Margin="0,12,0,0">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <TextBlock Text="Markdown: headings, lists, quotes, bold, italic and code. Links and images stay local; only biscotti://time/seconds links navigate."
+                                   Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <GroupBox Header="Edit Markdown" Padding="8" Margin="0,0,6,0">
+                    <TextBox x:Name="NotesBox" TextChanged="Edit_Changed"
+                             AutomationProperties.Name="Meeting notes in Markdown" ToolTip="Save or Ctrl+S keeps your edits locally."
                              AcceptsReturn="True" TextWrapping="Wrap" Background="Transparent"
                              BorderThickness="0" FontSize="15"
                              VerticalScrollBarVisibility="Auto"/>
                     </GroupBox>
+                    <GroupBox Grid.Column="1" Header="Preview" Padding="4">
+                        <local:SafeMarkdownView x:Name="NotesPreview" Markdown="{Binding Text, ElementName=NotesBox}"
+                                                TimestampRequested="Markdown_TimestampRequested" AutomationProperties.Name="Markdown preview"/>
+                    </GroupBox>
+                        </Grid>
+                    </Grid>
                 </Grid>
             </TabItem>
             <TabItem x:Name="SpeakersTab" Header="Speakers">
@@ -187,9 +218,12 @@
             </TabItem>
         </TabControl>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button x:Name="DeleteButton" Content="Delete meeting" Foreground="{DynamicResource DangerBrush}" Click="Delete_Click"/>
-            <Button x:Name="SaveButton" Content="Save" Style="{StaticResource PrimaryButton}" Margin="10,0,0,0" Click="Save_Click"/>
-        </StackPanel>
+        <Grid Grid.Row="2" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock x:Name="SaveStatus" Text="Saved locally" VerticalAlignment="Center" Margin="0,0,12,0"
+                       TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+            <Button x:Name="DeleteButton" Grid.Column="1" Content="Delete meeting" Foreground="{DynamicResource DangerBrush}" Click="Delete_Click"/>
+            <Button x:Name="SaveButton" Grid.Column="2" Content="Save" Style="{StaticResource PrimaryButton}" Margin="10,0,0,0" Click="Save_Click"/>
+        </Grid>
     </Grid>
 </Window>
