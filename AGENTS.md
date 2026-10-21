@@ -46,6 +46,11 @@ a pull request (see Git). Never work directly on `main`.
 6. **Commit, push and open a pull request** with `Fixes #N`, one `type:*`, one
    `priority:*`, relevant `area:*` labels (see `.github/labels.json`), then
    merge on green CI.
+   After opening the PR, keep monitoring every required CI check, deployment,
+   and approval through completion. Do not end the turn while any is pending.
+   If checks pass, merge per policy and verify the PR is merged and the linked
+   issue is closed. If a check fails, fix it and rerun; if human action is
+   required, hand over the exact blocker and leave the issue open.
 7. **Stop and hand over.** End the turn with:
    - first line: what changed, the issue, the PR link, the merged commit hash;
    - how to try it: the exact command and what to look for;
