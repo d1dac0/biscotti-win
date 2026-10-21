@@ -27,6 +27,42 @@
                 <TextBlock Text="DESIGN PREVIEW · Synthetic data only. No recording, downloads or saved changes." TextWrapping="Wrap" VerticalAlignment="Center"/>
             </DockPanel>
         </Border>
+        <Grid x:Name="DashboardGrid" SizeChanged="DashboardGrid_SizeChanged">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="270"/><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <StackPanel x:Name="CalendarPanel" Grid.Column="0">
+        <StackPanel Margin="0,0,0,12">
+            <TextBlock Text="UPCOMING · NEXT 7 DAYS" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" Margin="0"/>
+            <WrapPanel Margin="0,10,0,0">
+                <Button x:Name="ChooseCalendarButton" Content="Calendars…" Click="ChooseCalendarButton_Click"/>
+                <Button x:Name="RefreshCalendarButton" Content="Refresh" Margin="8,0,0,0" Click="RefreshCalendarButton_Click"/>
+                <Button x:Name="RemoveCalendarButton" Content="Remove" Margin="8,0,0,0" Click="RemoveCalendarButton_Click"/>
+            </WrapPanel>
+        </StackPanel>
+        <Border Style="{StaticResource Card}" Margin="0,0,0,24">
+            <StackPanel>
+                <TextBlock x:Name="CalendarSourceText" Style="{StaticResource Hint}"/>
+                <TextBlock x:Name="CalendarEmptyText" Text="Connect calendars to see your upcoming meetings." Style="{StaticResource Hint}"/>
+                <TextBlock Text="Select a meeting to preview, join or record." Style="{StaticResource Hint}" Margin="0,4,0,8"/>
+                <ScrollViewer MaxHeight="480" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="UpcomingMeetingsList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button HorizontalContentAlignment="Stretch" Margin="0,4" Padding="12"
+                                    Tag="{Binding}" Click="PreviewCalendarEvent_Click" AutomationProperties.Name="{Binding Title}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Style="{StaticResource Hint}" Text="{Binding RowDetail}"/>
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
+            </StackPanel>
+            <StackPanel x:Name="MainPrimaryPanel" Grid.Column="2">
         <Border Style="{StaticResource Card}" Margin="0,0,0,24">
             <StackPanel>
                 <TextBlock x:Name="RecordingHeading" Text="RECORD A MEETING" Style="{StaticResource SectionTitle}"/>
@@ -43,7 +79,7 @@
                 <ProgressBar x:Name="ProcessingProgress" Height="8" Margin="0,0,0,12" IsIndeterminate="True" Visibility="Collapsed" AutomationProperties.Name="Local processing progress"/>
                 <Label Target="{Binding ElementName=AudioAppPicker}" Content="Meeting _app audio" Padding="0,0,0,6"/>
                 <DockPanel>
-                    <Button DockPanel.Dock="Right" Content="Refresh apps" Margin="10,0,0,0" Click="RefreshAudioApps_Click"/>
+                    <Button x:Name="RefreshAppsButton" DockPanel.Dock="Right" Content="Refresh apps" Margin="10,0,0,0" Click="RefreshAudioApps_Click"/>
                     <ComboBox x:Name="AudioAppPicker" AutomationProperties.Name="Meeting app audio"/>
                 </DockPanel>
                 <TextBlock x:Name="RecordingDurationText" Foreground="{DynamicResource DangerBrush}" FontSize="22" FontWeight="SemiBold" Margin="0,16,0,0" Visibility="Collapsed" AutomationProperties.LiveSetting="Polite"/>
@@ -58,38 +94,6 @@
                 </Border>
                 <TextBlock x:Name="StatusText" Style="{StaticResource Hint}" Margin="0,12,0,0" Text="All local. Nothing leaves this PC." AutomationProperties.LiveSetting="Polite"/>
                 <TextBlock x:Name="DeviceWarningText" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" Margin="0,12,0,0" Visibility="Collapsed" AutomationProperties.LiveSetting="Polite"/>
-            </StackPanel>
-        </Border>
-        <DockPanel Margin="0,0,0,12">
-            <WrapPanel DockPanel.Dock="Right">
-                <Button x:Name="ChooseCalendarButton" Content="Choose .ics file" Click="ChooseCalendarButton_Click"/>
-                <Button x:Name="RefreshCalendarButton" Content="Refresh" Margin="8,0,0,0" Click="RefreshCalendarButton_Click"/>
-                <Button x:Name="RemoveCalendarButton" Content="Remove" Margin="8,0,0,0" Click="RemoveCalendarButton_Click"/>
-            </WrapPanel>
-            <TextBlock Text="UPCOMING" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" Margin="0"/>
-        </DockPanel>
-        <Border Style="{StaticResource Card}" Margin="0,0,0,24">
-            <StackPanel>
-                <TextBlock x:Name="CalendarSourceText" Style="{StaticResource Hint}"/>
-                <TextBlock x:Name="CalendarEmptyText" Text="Choose a local .ics file to see events in the next 24 hours." Style="{StaticResource Hint}"/>
-                <ItemsControl x:Name="UpcomingMeetingsList">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Padding="12" Margin="0,4" Background="{DynamicResource WashBrush}" CornerRadius="4">
-                                <DockPanel LastChildFill="True">
-                                    <Button DockPanel.Dock="Right" Content="Record" Margin="12,0,0,0" VerticalAlignment="Center" Tag="{Binding}" Click="RecordUpcomingMeeting_Click"/>
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                        <TextBlock Style="{StaticResource Hint}" Text="{Binding StartsAt, StringFormat={}{0:ddd, MMM d · h:mm tt}}"/>
-                                        <TextBlock Style="{StaticResource Hint}" Text="{Binding AttendeesDisplay}"/>
-                                        <TextBlock Style="{StaticResource Hint}" Text="{Binding Location}" TextWrapping="Wrap"/>
-                                        <TextBlock Style="{StaticResource Hint}" Text="{Binding Description}" TextWrapping="Wrap"/>
-                                    </StackPanel>
-                                </DockPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
             </StackPanel>
         </Border>
         <TextBlock Text="MEETING HISTORY" Style="{StaticResource SectionTitle}"/>
@@ -150,6 +154,8 @@
                 <Button x:Name="OpenMeetingButton" Content="Open selected meeting" Click="OpenMeeting_Click" HorizontalAlignment="Left" Margin="8" IsEnabled="False"/>
             </StackPanel>
         </Border>
+            </StackPanel>
+        </Grid>
         <TextBlock Text="Your audio, transcripts and notes stay on this PC." Style="{StaticResource Hint}" HorizontalAlignment="Center" Margin="0,24,0,0"/>
     </StackPanel>
     </ScrollViewer>

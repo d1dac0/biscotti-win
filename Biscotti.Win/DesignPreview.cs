@@ -33,7 +33,7 @@ internal static class DesignPreview
         var argument = args.FirstOrDefault(a => a == "--design-preview" || a.StartsWith("--design-preview=", StringComparison.Ordinal));
         if (argument is null) return false;
         var mode = argument.Contains('=') ? argument.Split('=', 2)[1] : "history";
-        if (!new[] { "setup", "empty", "history", "recording", "countdown", "processing", "failure", "review", "notes", "transfer", "speakers", "recovery", "tray", "calendar" }.Contains(mode))
+        if (!new[] { "setup", "empty", "history", "recording", "countdown", "processing", "failure", "review", "notes", "transfer", "speakers", "recovery", "tray", "calendar", "calendar-event", "calendar-connect", "calendar-google", "calendar-microsoft", "calendar-icloud" }.Contains(mode))
         {
             MessageBox.Show("Preview states: setup, empty, history, recording, countdown, processing, failure, review, notes, transfer, speakers, recovery, tray, calendar.", "Design preview");
             System.Windows.Application.Current.Shutdown();
@@ -84,8 +84,19 @@ internal static class DesignPreview
             ((TabControl)review.FindName("ReviewTabs")).SelectedItem = review.FindName("SpeakersTab");
         }
         if (mode == "tray") window.ShowPreviewTray();
+        if (mode == "calendar-event")
+            new CalendarEventWindow([CreateCalendarEvent()], e => Task.FromResult<CalendarMeeting?>(e), _ => Task.CompletedTask, designPreview: true) { Owner = window }.Show();
+        if (mode == "calendar-connect")
+            new CalendarConnectionWindow(new(), new OutlookCalendarSource(), designPreview: true) { Owner = window }.Show();
+        if (mode is "calendar-google" or "calendar-microsoft" or "calendar-icloud")
+            new CalendarProviderWindow(mode["calendar-".Length..], designPreview: true) { Owner = window }.Show();
         return true;
     }
+
+    internal static CalendarMeeting CreateCalendarEvent() => new("synthetic-atlas", "Atlas design review",
+        DateTimeOffset.Now.AddMinutes(10), DateTimeOffset.Now.AddMinutes(40), new[] { "Alex", "Jordan" },
+        "Review the prototype, decide next steps, and assign owners.\nBring the latest accessibility checklist.", "Design studio · Room 3",
+        "synthetic-work", "Work", "https://meet.google.com/abc-defg-hij");
 
     internal static Meeting CreateMeeting() => new()
     {
@@ -112,6 +123,7 @@ public partial class MainWindow
     {
         if (!_designPreview) throw new InvalidOperationException("Preview requires isolated startup.");
         Title = "Biscotti Win — synthetic design preview";
+        MainScroll.ScrollToTop();
         PreviewBanner.Visibility = Visibility.Visible;
         var meeting = DesignPreview.CreateMeeting();
         if (mode == "recovery")
@@ -130,21 +142,19 @@ public partial class MainWindow
             : "Ready for a private meeting. Preview does not record audio.";
         CalendarSourceText.Text = empty ? "" : "Synthetic calendar · no calendar file opened";
         CalendarEmptyText.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
-        if (!empty)
-            UpcomingMeetingsList.ItemsSource = new[]
-            {
-                new CalendarMeeting("synthetic-atlas", "Atlas design review",
-                    new DateTimeOffset(2026, 10, 20, 16, 0, 0, TimeSpan.Zero),
-                    new DateTimeOffset(2026, 10, 20, 16, 30, 0, TimeSpan.Zero), new[] { "Alex", "Jordan" },
-                    "Review the prototype, decide next steps, and assign owners.", "Room 3"),
-            };
+        UpcomingMeetingsList.ItemsSource = empty ? Array.Empty<CalendarMeeting>() : new[]
+        {
+            DesignPreview.CreateCalendarEvent(),
+            DesignPreview.CreateCalendarEvent() with { EventId = "synthetic-next", Title = "Weekly planning", StartsAt = DateTimeOffset.Now.AddDays(2), EndsAt = DateTimeOffset.Now.AddDays(2).AddMinutes(45) }
+        };
         if (mode is "calendar" or "tray")
         {
             _settings.CalendarFilePath = "synthetic.ics";
             _settings.CalendarTrayNavigation = true;
             _upcomingMeetings = (UpcomingMeetingsList.ItemsSource as IEnumerable<CalendarMeeting>)?.ToArray() ?? [];
         }
-        ChooseCalendarButton.IsEnabled = RefreshCalendarButton.IsEnabled = false;
+        ChooseCalendarButton.IsEnabled = true;
+        RefreshCalendarButton.IsEnabled = RemoveCalendarButton.IsEnabled = false;
         if (mode == "processing")
         {
             UpdateRecordingPresentation(RecordingState.Transcribing);

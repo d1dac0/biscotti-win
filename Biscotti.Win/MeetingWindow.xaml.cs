@@ -6,6 +6,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Biscotti.Core.Audio;
+using Biscotti.Core.Calendar;
 using Biscotti.Core.Models;
 using Biscotti.Core.Storage;
 using NAudio.Wave;
@@ -42,12 +43,16 @@ namespace Biscotti.Win
             Func<Meeting, CancellationToken, Task>? regenerateSummary = null,
             Action<Meeting>? saveMeeting = null,
             Func<string, Stream>? audioStreamFactory = null,
-            Func<IWavePlayer>? audioOutputFactory = null)
+            Func<IWavePlayer>? audioOutputFactory = null,
+            Func<DateTimeOffset, Task<IReadOnlyList<CalendarMeeting>>>? calendarEventsNear = null,
+            Action<CalendarMeeting?>? setCalendarEvent = null)
         {
             InitializeComponent();
             _playbackTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
             _playbackTimer.Tick += (_, _) => RefreshTransportPosition();
             _meeting = meeting;
+            _calendarEventsNear = calendarEventsNear;
+            _setCalendarEvent = setCalendarEvent;
             _audioStreamFactory = audioStreamFactory ?? EncryptedAudioPlayback.OpenWavStream;
             _audioOutputFactory = audioOutputFactory ?? (() => new WaveOutEvent());
             _designPreview = designPreview;
@@ -83,6 +88,7 @@ namespace Biscotti.Win
                 StopPlayback();
             };
             InitializeEditing();
+            RefreshCalendarContext();
         }
 
         public void RefreshTranscript()
@@ -97,6 +103,7 @@ namespace Biscotti.Win
 
         private void UpdateReviewState()
         {
+            RefreshCalendarContext();
             TranscriptEmptyText.Visibility = _meeting.Transcript.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             TranscriptEmptyText.Text = _isLiveRecording ? "Listening for speech… Your live transcript will appear here."
                 : "No transcript is available for this meeting yet.";
@@ -140,6 +147,7 @@ namespace Biscotti.Win
         public void StopAddingTimestampedNotes()
         {
             _isProcessing = true;
+            RefreshCalendarContext();
             LiveStatus.Text = "Processing · preparing your transcript and summary locally";
             SummaryEmptyText.Text = "Preparing your summary locally…";
             LiveNoteInput.IsEnabled = false;

@@ -13,6 +13,7 @@ public partial class MeetingWindow
     private void RefreshProcessingPanel()
     {
         if (ProcessingPanel is null) return;
+        RefreshCalendarContext();
         var status = _meeting.ProcessingStatus;
         var hasTranscript = _meeting.Transcript.Count > 0;
         var show = status != MeetingProcessingStatus.Complete || hasTranscript;

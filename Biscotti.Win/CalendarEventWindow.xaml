@@ -1,0 +1,37 @@
+<Window x:Class="Biscotti.Win.CalendarEventWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Calendar event" Width="660" Height="640" MinWidth="460" MinHeight="440"
+        WindowStartupLocation="CenterOwner" Style="{StaticResource {x:Type Window}}">
+    <Grid Margin="24">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock x:Name="Heading" Text="Upcoming meeting" Style="{StaticResource SectionTitle}"/>
+            <ComboBox x:Name="EventPicker" SelectionChanged="Event_Changed" AutomationProperties.Name="Calendar event" Margin="0,0,0,16">
+                <ComboBox.ItemTemplate><DataTemplate>
+                    <StackPanel><TextBlock Text="{Binding Title}"/><TextBlock Text="{Binding RowDetail}" Style="{StaticResource Hint}"/></StackPanel>
+                </DataTemplate></ComboBox.ItemTemplate>
+            </ComboBox>
+        </StackPanel>
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock x:Name="EventTitle" FontFamily="Georgia" FontSize="26" TextWrapping="Wrap"/>
+                <TextBlock x:Name="EventWhen" Style="{StaticResource Hint}" Margin="0,10,0,6"/>
+                <TextBlock x:Name="EventCalendar" Style="{StaticResource Hint}" Margin="0,0,0,16"/>
+                <TextBlock Text="INVITED" Style="{StaticResource SectionTitle}"/>
+                <TextBlock x:Name="EventAttendees" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                <TextBlock Text="WHERE" Style="{StaticResource SectionTitle}"/>
+                <TextBlock x:Name="EventLocation" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                <TextBlock Text="DESCRIPTION" Style="{StaticResource SectionTitle}"/>
+                <TextBlock x:Name="EventDescription" TextWrapping="Wrap" Margin="0,0,0,16"/>
+            </StackPanel>
+        </ScrollViewer>
+        <TextBlock x:Name="EventStatus" Grid.Row="2" Style="{StaticResource Hint}" Margin="0,12" AutomationProperties.LiveSetting="Polite"
+                   Text="Invitees are calendar context; their presence is not proof of attendance."/>
+        <WrapPanel Grid.Row="3" HorizontalAlignment="Right">
+            <Button Content="Close" IsCancel="True" Margin="0,0,8,0"/>
+            <Button x:Name="JoinButton" Content="Join meeting" Click="Join_Click" Margin="0,0,8,0"/>
+            <Button x:Name="EventActionButton" Content="Record meeting" Click="Action_Click" Style="{StaticResource PrimaryButton}"/>
+        </WrapPanel>
+    </Grid>
+</Window>

@@ -30,6 +30,7 @@ namespace Biscotti.Win
             InitializeComponent();
             _designPreview = designPreview;
             _settings = designPreview ? new AppSettings() : AppSettings.Load();
+            if (!designPreview) ConfigureCalendarSource();
             if (!designPreview) WhisperRuntimeConfigurator.Apply(_settings); // before any WhisperFactory is created
             _meetings = new MeetingService(_settings);
             AutoStopBox.IsChecked = _settings.AutoStopEnabled;
@@ -192,116 +193,6 @@ namespace Biscotti.Win
             UpdateCalendarControls();
         }
 
-        private void UpdateCalendarControls()
-        {
-            var canEdit = _meetings.State == RecordingState.Idle;
-            ChooseCalendarButton.IsEnabled = canEdit;
-            RefreshCalendarButton.IsEnabled = canEdit;
-            UpcomingMeetingsList.IsEnabled = canEdit;
-        }
-
-        private async Task RefreshCalendarMeetingsAsync(bool reportErrors = false)
-        {
-            var path = _settings.CalendarFilePath;
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                _upcomingMeetings = Array.Empty<CalendarMeeting>();
-                UpcomingMeetingsList.ItemsSource = _upcomingMeetings;
-                CalendarSourceText.Text = "";
-                CalendarEmptyText.Text = "Choose a local .ics file to see events in the next 24 hours.";
-                CalendarEmptyText.Visibility = Visibility.Visible;
-                RemoveCalendarButton.IsEnabled = false;
-                MaybeShowCalendarNotification();
-                return;
-            }
-
-            try
-            {
-                var meetings = await Task.Run(() => IcsCalendarReader.ReadUpcoming(path, DateTimeOffset.Now));
-                _upcomingMeetings = meetings;
-                UpcomingMeetingsList.ItemsSource = meetings;
-                CalendarSourceText.Text = $"Local calendar: {System.IO.Path.GetFileName(path)} · refreshed {DateTime.Now:t}";
-                RemoveCalendarButton.IsEnabled = true;
-                CalendarEmptyText.Text = meetings.Count == 0
-                    ? "No upcoming meetings in the next 24 hours."
-                    : "";
-                CalendarEmptyText.Visibility = meetings.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-                MaybeShowCalendarNotification();
-            }
-            catch (Exception ex)
-            {
-                _upcomingMeetings = Array.Empty<CalendarMeeting>();
-                UpcomingMeetingsList.ItemsSource = _upcomingMeetings;
-                CalendarSourceText.Text = $"Local calendar: {System.IO.Path.GetFileName(path)}";
-                RemoveCalendarButton.IsEnabled = true;
-                CalendarEmptyText.Text = "The selected calendar file could not be read. Choose another .ics file or check that it is available.";
-                CalendarEmptyText.Visibility = Visibility.Visible;
-                MaybeShowCalendarNotification();
-                if (reportErrors)
-                    MessageBox.Show(this, ex.Message, "Calendar file unavailable", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-        }
-
-        private async void ChooseCalendarButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (_designPreview) return;
-            if (_meetings.State != RecordingState.Idle) return;
-            if (string.IsNullOrWhiteSpace(_settings.CalendarFilePath))
-            {
-                var consent = MessageBox.Show(this,
-                    "Biscotti will read the .ics file you choose on this PC to show upcoming events and offer to start a recording. Calendar contents are not uploaded or sent to a calendar provider. Starting a recording from an event may use its description, location, and invitee names as untrusted context for the local summary. Invitees are not treated as attendees.",
-                    "Use a local calendar?", MessageBoxButton.OKCancel, MessageBoxImage.Information);
-                if (consent != MessageBoxResult.OK) return;
-            }
-            var dialog = new Microsoft.Win32.OpenFileDialog
-            {
-                Title = "Choose a local iCalendar export",
-                Filter = "iCalendar files (*.ics)|*.ics|All files (*.*)|*.*",
-                CheckFileExists = true,
-            };
-            if (dialog.ShowDialog(this) != true) return;
-
-            var previous = _settings.CalendarFilePath;
-            _settings.CalendarFilePath = dialog.FileName;
-            try
-            {
-                _settings.Save();
-                await RefreshCalendarMeetingsAsync(reportErrors: true);
-            }
-            catch (Exception ex)
-            {
-                _settings.CalendarFilePath = previous;
-                MessageBox.Show(this, ex.Message, "Could not save calendar selection", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private async void RemoveCalendarButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (_designPreview || _meetings.State != RecordingState.Idle) return;
-            var previous = _settings.CalendarFilePath;
-            _settings.CalendarFilePath = null;
-            try
-            {
-                _settings.Save();
-                _upcomingMeetings = Array.Empty<CalendarMeeting>();
-                UpcomingMeetingsList.ItemsSource = _upcomingMeetings;
-                CalendarSourceText.Text = "";
-                CalendarEmptyText.Text = "Calendar removed. Choose a local .ics file to see events in the next 24 hours.";
-                CalendarEmptyText.Visibility = Visibility.Visible;
-                RemoveCalendarButton.IsEnabled = false;
-                _trayCalendarSignature = null;
-                await RefreshCalendarMeetingsAsync();
-            }
-            catch (Exception ex)
-            {
-                _settings.CalendarFilePath = previous;
-                MessageBox.Show(this, ex.Message, "Could not remove calendar selection", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private async void RefreshCalendarButton_Click(object sender, RoutedEventArgs e) =>
-            await (_designPreview ? Task.CompletedTask : RefreshCalendarMeetingsAsync(reportErrors: true));
-
         private void AudioDevicesButton_Click(object sender, RoutedEventArgs e) => ShowAudioDevices();
 
         private void ShowAudioDevices()
@@ -404,7 +295,14 @@ namespace Biscotti.Win
 
         private async Task StartRecordingAsync(CalendarMeeting? calendarMeeting = null, bool allowSystemWideCapture = false)
         {
-            if (_meetings.State != RecordingState.Idle || _recording) return;
+            if (_meetings.State != RecordingState.Idle || _recording || _calendarStartPending || _calendarConfigurationOpen) return;
+            if (!ModelStore.IsDownloaded(CurrentOrPreferredModel()))
+            {
+                StatusText.Text = "Download the transcription model before starting a recording.";
+                return;
+            }
+            _calendarStartPending = true;
+            UpdateCalendarControls();
             try
             {
                 RecordButton.IsEnabled = false;
@@ -419,6 +317,7 @@ namespace Biscotti.Win
                         return;
                     }
                 }
+                else calendarMeeting = CalendarQuery.BestMatch(_calendar.Upcoming(DateTimeOffset.Now), DateTimeOffset.Now);
                 var selectedApp = AudioAppPicker.SelectedItem as AudioAppChoice;
                 await _meetings.StartRecordingAsync(selectedApp?.ProcessId, selectedApp?.ProcessName, calendarMeeting,
                     selectedApp?.ProcessId is null || allowSystemWideCapture);
@@ -430,7 +329,8 @@ namespace Biscotti.Win
                 {
                     _liveMeetingWindow = new MeetingWindow(meeting, isLiveRecording: true,
                         addTimestampedNote: _meetings.AddTimestampedNote,
-                        recordingElapsedSeconds: () => _recordingStopwatch?.Elapsed.TotalSeconds ?? 0) { Owner = this };
+                        recordingElapsedSeconds: () => _recordingStopwatch?.Elapsed.TotalSeconds ?? 0,
+                        calendarEventsNear: CalendarEventsNearAsync, setCalendarEvent: _meetings.LinkCalendarEvent) { Owner = this };
                     _liveMeetingWindow.Closed += (_, _) => _liveMeetingWindow = null;
                     _liveMeetingWindow.Show();
                 }
@@ -450,7 +350,10 @@ namespace Biscotti.Win
                     $"{ex.Message}\n\nThis captures speaker audio from every app, which may include notifications, music, or unrelated conversations. Retry with all speaker audio?",
                     "Confirm all speaker audio", MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 if (answer == MessageBoxResult.Yes)
+                {
+                    _calendarStartPending = false;
                     await StartRecordingAsync(calendarMeeting, allowSystemWideCapture: true);
+                }
             }
             catch (Exception ex)
             {
@@ -458,6 +361,7 @@ namespace Biscotti.Win
             }
             finally
             {
+                _calendarStartPending = false;
                 UpdateDeviceControls();
                 UpdateModelButtons();
             }
@@ -595,7 +499,8 @@ namespace Biscotti.Win
             var window = new MeetingWindow(meeting, designPreview: _designPreview,
                 recoverInterruptedMeeting: _designPreview ? PreviewRecoverAsync : _meetings.RecoverInterruptedMeetingAsync,
                 retryTranscription: _designPreview ? PreviewRetryTranscriptionAsync : _meetings.RetrySavedTranscriptionAsync,
-                regenerateSummary: _designPreview ? PreviewRegenerateSummaryAsync : _meetings.RegenerateSavedSummaryAsync)
+                regenerateSummary: _designPreview ? PreviewRegenerateSummaryAsync : _meetings.RegenerateSavedSummaryAsync,
+                calendarEventsNear: CalendarEventsNearAsync)
             { Owner = this };
             window.ShowDialog();
             if (!_designPreview) RefreshList();
@@ -649,6 +554,7 @@ namespace Biscotti.Win
         {
             _healthTimer.Stop();
             _calendarTimer.Stop();
+            _calendar.Dispose();
             _historySearchCancellation?.Cancel();
             _modelDownload?.Cancel();
             _transferCancellation?.Cancel();
