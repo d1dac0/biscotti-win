@@ -1,96 +1,62 @@
 # Biscotti Win
 
-Free, private meeting transcription for Windows — a PC port of [Biscotti (macOS)](https://github.com/scosman/Biscotti).
+Free, private meeting transcription and review for Windows. Biscotti captures your microphone and meeting audio, transcribes speech on your PC, and can create a summary with a local language model.
 
-Records your meetings and turns them into speaker-labeled transcripts and AI summaries.
-**No cloud. No bot joins your call. No account.** Recording, transcription, and summaries all run locally on your PC.
+**Your meetings stay on your PC.** No account is required, no bot joins the call, and meeting audio, transcripts, summaries, and models are not uploaded. Network access is used when you choose to download the app or its models and optional runtime packages.
 
-## How it works
+## What Biscotti can do
 
-1. **Record** — captures your microphone ("You") and your PC's system audio ("Speaker N", everyone on the call) via WASAPI loopback from any app: Zoom, Teams, Meet, FaceTime (web), Slack huddles — or an in-person conversation through your mic.
-2. **Transcribe** — on-device speech recognition with [Whisper.cpp](https://github.com/ggml-org/whisper.cpp) via [Whisper.net](https://github.com/sandrohanea/whisper.net). The GGML model downloads once (Large v3 Turbo ~1.6 GB, or Small ~466 MB).
-3. **Summarize** — a local LLM through [Ollama](https://ollama.com) (default: Gemma 3) writes a summary, action items, a meeting title, and guesses participants' real names if they said them aloud.
-
-Nothing leaves your machine. Ollama is optional — without it you still get the transcript.
-
-## Tray controls
-
-Biscotti Win stays available from the notification area. Closing the main window hides it in the tray; use the tray menu's **Exit** command to quit. The icon reflects whether the app is idle, recording, or processing. **Ctrl+Alt+R** starts or stops recording by default; change the shortcut from **Settings** in the tray menu. Windows controls whether the summary-ready notification appears during Focus Assist / Do not disturb.
-
-## Build
-
-```powershell
-dotnet build -c Release
-Biscotti.Win\bin\Release\net10.0-windows10.0.17763.0\win-x64\Biscotti.Win.exe
-```
+- **Record two audio tracks.** Capture your microphone and speaker audio separately. On supported Windows versions, choose a running app to capture; otherwise Biscotti can use device loopback after you confirm that it may include audio from every app. Choose your microphone and output device in Audio devices. In-person conversations can be recorded with the microphone alone.
+- **Transcribe as you meet.** Whisper runs locally and shows an incremental transcript while recording, then processes the saved audio. Choose Whisper Large v3 Turbo (default, about 1.6 GB) or Small (about 466 MB). CPU transcription works without an NVIDIA GPU; compatible NVIDIA GPUs can use an optional CUDA runtime.
+- **Create optional local summaries.** If Ollama is installed on this PC and has a local model available, Biscotti can generate a meeting title, summary, and action items. Choose a local model and summary preferences in Settings. Without Ollama or a model, recording and transcription still work.
+- **Review and manage meetings.** Browse and search meeting history, read speaker-labeled transcripts, summaries and notes, play the saved microphone or speaker track, correct speaker labels, and retry or recover interrupted processing. Speaker labels are best effort; overlapping speech may not be separated.
+- **Take notes and control recording.** Add notes linked to the recording time, use the tray menu or configurable global shortcut to start and stop, and enable silence-based auto-stop.
+- **Use local calendar context (optional).** Choose an `.ics` calendar file to see upcoming events and start a recording from an event. Biscotti reads the file on this PC; calendar data is not sent to a calendar provider.
+- **Connect a local MCP client (optional).** The read-only Biscotti MCP server lets compatible clients search saved meetings and read meeting details or transcript pages. It does not record audio or call remote services. See the [MCP setup guide](docs/mcp-server.md).
+- **Import and export meeting text.** Use CSV for meeting collections and Markdown for an individual meeting. Exports and clipboard copies are plain text and do not include audio; Biscotti asks before creating an export.
 
 ## Requirements
 
-- Windows 10/11 with a microphone
-- .NET 10 SDK (to build)
-- Optional: [Ollama](https://ollama.com) installed with `ollama pull gemma3:4b` for AI summaries
+### To run a release
 
-## Install a release
+- Windows 10 or 11, 64-bit.
+- A microphone to record your voice. For calls, use a Windows audio output device for speaker audio.
+- Free disk space for the Whisper model you choose: about 1.6 GB for Large v3 Turbo or 466 MB for Small, plus room for meeting recordings. Biscotti checks available space before downloading.
+- Internet access for the initial app/model downloads. After downloads finish, recording, transcription, review, and Ollama summaries run locally.
 
-Windows release ZIP install, update, uninstall, and retained-data steps are in
-[the Windows release guide](docs/windows-release.md).
+The [Windows release guide](docs/windows-release.md) explains installation, updates, and uninstalling. The self-contained release includes the .NET and Windows app runtimes; you do not need to install them separately.
 
-## Data location
+### Optional components
 
-Everything is stored under `%LOCALAPPDATA%\BiscottiWin`:
+- **Summaries:** Install [Ollama](https://ollama.com) and download a model, for example `ollama pull gemma3:4b`. Ollama and the selected model must be available locally. Their disk and hardware needs depend on the model.
+- **Faster transcription:** A compatible NVIDIA GPU and driver are required for the optional CUDA tier. If you opt in, Biscotti downloads about 330 MB of runtime files once. CPU transcription remains available without it.
+- **Speaker grouping:** The first processed meeting downloads a 26.5 MB English speaker model. Grouping is approximate and does not separate overlapping speech. Cross-meeting voice memory is off until you opt in and save a voice.
+- **Build from source:** .NET 10 SDK on Windows x64. Run `dotnet build -c Release BiscottiWin.slnx` from the repository root.
 
-- `Meetings\<guid>\meeting.json` — DPAPI-protected structured transcript, summary, notes
-- `Meetings\<guid>\meeting.md` — DPAPI-protected Markdown rendering
-- `Meetings\<guid>\mic.wav` / `sys.wav` — full audio, yours to delete
-- `Models\` — Whisper GGML model
+## Get started
 
-`meeting.json` and `meeting.md` are protected with Windows DPAPI for the current
-user; older plaintext meeting files are migrated after each protected copy is
-verified. `mic.wav` and `sys.wav` use authenticated AES-GCM containers with a
-DPAPI-protected meeting key. DPAPI CurrentUser does not protect data from
-software already running as your Windows user. See the
-[DPAPI storage decision](docs/specs/dpapi-meeting-data-at-rest.md) for migration,
-profile roaming, and password-reset behavior.
+1. Install Biscotti using the [Windows release guide](docs/windows-release.md), then launch `Biscotti.Win.exe`.
+2. Download a Whisper model in the app. Large v3 Turbo is selected by default; choose Small in Settings if you prefer the smaller download.
+3. To enable summaries, install Ollama, run `ollama pull gemma3:4b`, then choose an installed local model in Biscotti Settings.
+4. Select your audio devices, optionally select the meeting app and a local calendar file, then start recording.
 
-## Chat with local meetings
+## Privacy and where data is stored
 
-Biscotti includes a read-only MCP server that lets compatible local MCP clients
-search saved meetings, read meeting details, and page through timestamped,
-speaker-labeled transcripts. The server reads the same DPAPI-protected local
-`meeting.json` files through the app's storage boundary and does not open audio
-files or contact remote services.
-See [the MCP setup guide](docs/mcp-server.md) for build and client configuration.
+Biscotti stores app data under `%LOCALAPPDATA%\BiscottiWin`:
 
-## Remote speaker labels
+- `Meetings\<guid>\meeting.json` and `meeting.md` contain meeting text and are protected with Windows DPAPI for your Windows user.
+- `Meetings\<guid>\mic.wav` and `sys.wav` contain authenticated encrypted audio; their keys are protected with DPAPI.
+- `Models\` contains downloaded Whisper and speaker models. Optional GPU runtime files are stored under `runtimes\`.
 
-After recording, Biscotti locally groups remote transcript segments using
-speaker embeddings. Labels are best effort: short or unusable segments keep
-their fallback labels, and overlapping speech is not separated. A speaker may
-also receive more than one cluster label. Biscotti can replace a cluster label
-with a real name only when that speaker introduces themselves in the transcript.
-The first processed meeting downloads the 26.5 MB English speaker model into
-the local model cache; no meeting audio is uploaded. See
-[third-party notices](docs/THIRD-PARTY-NOTICES.md) for model attribution.
-The measured scope and limitations are in the
-[speaker-clustering evaluation](docs/speaker-clustering-evaluation.md).
+Protected meeting files are tied to the Windows profile that created them. DPAPI CurrentUser protects data at rest from other Windows users; it does not protect it from software already running as your account. When you export or copy meeting text, the destination is unencrypted, so choose a location with the privacy you need. See the [meeting data protection decision](docs/specs/dpapi-meeting-data-at-rest.md).
 
-## Feature parity and UI preview
-
-Windows already includes local .ics upcoming meetings, silence-based auto-stop,
-custom vocabulary and timestamped notes. They differ from the Mac workflows;
-the [source-backed parity review](docs/mac-feature-parity-review.md) records
-the coverage and linked follow-ups for calendar prompts, speaker identity,
-history search, export, recovery and richer note/audio navigation.
-
-To inspect the UI with synthetic meetings and no recording, model download or
-profile-data access, run from the repository root:
+## Build and run from source
 
 ```powershell
-dotnet run --project Biscotti.Win -- --design-preview=history
+dotnet build -c Release BiscottiWin.slnx
+dotnet run --project Biscotti.Win
 ```
 
-Other preview states: `setup`, `empty`, `recording`, `processing`, `failure`,
-`review`, `tray`. The preview uses the real WPF screens with in-memory Atlas
-sample data; saving/deleting cannot modify your meetings. Close the preview
-windows when finished. [Annotated visual comparisons](docs/parity-evidence/comparison.html)
-label Mac source diagrams separately from Windows runtime captures.
+## Project status
+
+The features above describe the current Windows app. Follow [open issues](https://github.com/d1dac0/biscotti-win/issues) for work in progress and planned improvements.
