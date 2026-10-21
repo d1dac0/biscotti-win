@@ -47,6 +47,15 @@
                     <TextBlock Text="Example: Focus on decisions, risks and next steps. Summary sections and action items are kept." Style="{StaticResource Hint}" Margin="0,8,0,0"/>
                 </StackPanel>
             </Border>
+            <TextBlock Text="LOCAL CALENDAR" Style="{StaticResource SectionTitle}"/>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,24">
+                <StackPanel>
+                    <TextBlock Text="Biscotti reads the local .ics file you choose. Calendar data stays on this PC; no provider account or calendar upload is used." Style="{StaticResource Hint}" TextWrapping="Wrap"/>
+                    <CheckBox x:Name="CalendarNotificationsBox" Content="Show a generic notification shortly before an event" Margin="0,12,0,0" AutomationProperties.Name="Calendar start notifications"/>
+                    <TextBlock Text="Notifications contain no event title or details. Windows notification settings can still suppress them." Style="{StaticResource Hint}" Margin="24,4,0,0" TextWrapping="Wrap"/>
+                    <CheckBox x:Name="CalendarTrayBox" Content="Show upcoming events and recent meetings in the tray menu" Margin="0,12,0,0" AutomationProperties.Name="Calendar and recent tray navigation"/>
+                </StackPanel>
+            </Border>
             <TextBlock Text="MICROPHONE ACCESS" Style="{StaticResource SectionTitle}"/>
             <Border Style="{StaticResource Card}" Margin="0,0,0,24">
                 <StackPanel>

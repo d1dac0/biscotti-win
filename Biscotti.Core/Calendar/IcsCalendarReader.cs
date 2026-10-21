@@ -48,7 +48,10 @@ public static class IcsCalendarReader
                 NormalizeTitle(x.Event.Summary),
                 new DateTimeOffset(DateTime.SpecifyKind(x.Occurrence.Period!.StartTime!.AsUtc, DateTimeKind.Utc)),
                 new DateTimeOffset(DateTime.SpecifyKind(x.Occurrence.Period!.EffectiveEndTime!.AsUtc, DateTimeKind.Utc)),
-                AttendeeNames(x.Event)))
+                AttendeeNames(x.Event),
+                NormalizeMetadata(x.Event.Description, 2000),
+                NormalizeMetadata(x.Event.Location, 300)))
+            .DistinctBy(meeting => meeting.EventId, StringComparer.Ordinal)
             .ToList();
 
         return occurrences;
@@ -74,4 +77,12 @@ public static class IcsCalendarReader
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(50)
             .ToList();
+
+    private static string? NormalizeMetadata(string? value, int maximumLength)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var cleaned = new string(value.Where(character => !char.IsControl(character) || character is '\r' or '\n' or '\t')
+            .Take(maximumLength).ToArray()).Trim();
+        return cleaned.Length == 0 ? null : cleaned;
+    }
 }

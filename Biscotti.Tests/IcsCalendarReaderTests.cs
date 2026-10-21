@@ -16,6 +16,8 @@ public sealed class IcsCalendarReaderTests
             DTSTART:20261020T160000Z
             DTEND:20261020T170000Z
             SUMMARY:Design review
+            LOCATION:Room 3 / local lab
+            DESCRIPTION:Review the prototype and decide next steps.
             ATTENDEE;CN=Alex Example:mailto:alex@example.test
             ATTENDEE;CN=Sam Example:mailto:sam@example.test
             END:VEVENT
@@ -27,6 +29,8 @@ public sealed class IcsCalendarReaderTests
         Assert.Equal(now.AddMinutes(30), meeting.StartsAt);
         Assert.Equal(now.AddMinutes(90), meeting.EndsAt);
         Assert.Equal(new[] { "Alex Example", "Sam Example" }, meeting.Attendees);
+        Assert.Equal("Review the prototype and decide next steps.", meeting.Description);
+        Assert.Equal("Room 3 / local lab", meeting.Location);
     }
 
     [Fact]
@@ -137,6 +141,37 @@ public sealed class IcsCalendarReaderTests
             """);
 
         Assert.Equal(new[] { "First calendar", "Second calendar" }, meetings.Select(meeting => meeting.Title));
+    }
+
+    [Fact]
+    public void ReadUpcoming_DeduplicatesOccurrencesAndOmitsExpiredEvents()
+    {
+        var now = new DateTimeOffset(2026, 10, 20, 15, 30, 0, TimeSpan.Zero);
+        var meetings = ReadCalendar(now, """
+            BEGIN:VCALENDAR
+            VERSION:2.0
+            BEGIN:VEVENT
+            UID:duplicate
+            DTSTART:20261020T160000Z
+            DTEND:20261020T163000Z
+            SUMMARY:Current copy
+            END:VEVENT
+            BEGIN:VEVENT
+            UID:duplicate
+            DTSTART:20261020T160000Z
+            DTEND:20261020T163000Z
+            SUMMARY:Duplicate copy
+            END:VEVENT
+            BEGIN:VEVENT
+            UID:expired
+            DTSTART:20261020T140000Z
+            DTEND:20261020T143000Z
+            SUMMARY:Expired meeting
+            END:VEVENT
+            END:VCALENDAR
+            """);
+
+        Assert.Equal("Current copy", Assert.Single(meetings).Title);
     }
 
     private static IReadOnlyList<CalendarMeeting> ReadCalendar(
