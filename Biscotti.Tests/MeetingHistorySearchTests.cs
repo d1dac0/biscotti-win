@@ -7,6 +7,20 @@ namespace Biscotti.Tests;
 public sealed class MeetingHistorySearchTests
 {
     [Theory]
+    [InlineData(MeetingProcessingStatus.Recording, "recover saved audio")]
+    [InlineData(MeetingProcessingStatus.Transcribing, "retry transcription")]
+    [InlineData(MeetingProcessingStatus.TranscriptionFailed, "retry from saved audio")]
+    [InlineData(MeetingProcessingStatus.SummaryPending, "generate or refresh summary")]
+    [InlineData(MeetingProcessingStatus.Summarizing, "regenerate summary")]
+    [InlineData(MeetingProcessingStatus.SummaryFailed, "retry local summary")]
+    public void HistorySearchResultExplainsHowToResumeInterruptedProcessing(MeetingProcessingStatus status, string notice)
+    {
+        var meeting = new Meeting { ProcessingStatus = status };
+        var result = Assert.Single(MeetingHistorySearch.Search([MeetingSearchDocument.FromMeeting(meeting)], " "));
+        Assert.Contains(notice, result.ProcessingNotice, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
     [InlineData("title", "Title:")]
     [InlineData("summary", "Summary:")]
     [InlineData("private note", "Notes:")]

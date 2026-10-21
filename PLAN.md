@@ -207,3 +207,24 @@ Verification after merging `origin/main` at `4236417`: `tools/build.ps1` and
 `tools/check.ps1` passed, with 144 Core tests and 1 Windows flow test, none
 skipped. The synthetic import-preview and meeting-review screens were inspected.
 Existing obsolete NAudio API and inexact test-read compiler warnings remain.
+
+## Saved meeting recovery (#84)
+
+**Status:** Implemented and locally verified; PR delivery in progress.
+Decision: [recovery and replacement policy](docs/specs/saved-meeting-recovery.md).
+See [verification and synthetic Windows preview](docs/saved-meeting-recovery-verification.md).
+
+1. Record the [recovery and replacement decision](docs/specs/saved-meeting-recovery.md).
+2. Persist capture/transcription/summary status, surface interrupted meetings, and
+   add explicit recovery, transcription retry and summary regeneration actions.
+3. Preserve previous transcript and summary content on errors; test encrypted
+   truncated audio, missing resources, storage errors and WPF flow with synthetic data.
+4. Deliver one labelled PR after build/check and native flow verification.
+
+Baseline at d3582af: `tools/build.ps1` and `tools/check.ps1` passed, with 144
+Core/MCP tests and 1 Windows flow test, none skipped. Existing obsolete NAudio
+API and inexact test-read warnings remain.
+
+Local verification: `tools/build.ps1` and `tools/check.ps1` passed with 158
+Core/MCP tests and 1 Windows flow test, none skipped. The synthetic recovery
+preview passed in the native Windows app.
