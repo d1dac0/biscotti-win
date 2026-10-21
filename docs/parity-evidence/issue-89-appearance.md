@@ -33,6 +33,12 @@ high-contrast mode turns off.
 - The UI Automation tree exposed named Settings, Search meetings and Meeting
   app audio controls. This confirms discoverable control names, not a full
   screen-reader pass.
+- The synthetic Release preview exposed a dark-theme scrollbar defect: a shared
+  14-DIP width and height reduced the vertical bar to a short strip and left
+  its line buttons disabled. Sizing the vertical and horizontal orientations
+  separately restored the full-height bar; UI Automation enabled the line
+  buttons, and clicking Down moved the value 48 to 64 while Up returned it to
+  48.
 - `git diff --check`: passed.
 
 The preview uses only synthetic in-memory data. No recording, model download,
