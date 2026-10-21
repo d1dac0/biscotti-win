@@ -1,6 +1,6 @@
 # Calendar context and tray offers
 
-**Status:** Accepted
+**Status:** Superseded by [Windows calendar parity](calendar-parity-windows.md).
 
 ## Decision
 

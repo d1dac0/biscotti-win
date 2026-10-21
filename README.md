@@ -2,7 +2,7 @@
 
 Free, private meeting transcription and review for Windows. Biscotti captures your microphone and meeting audio, transcribes speech on your PC, and can create a summary with a local language model.
 
-**Your meetings stay on your PC.** No account is required, no bot joins the call, and meeting audio, transcripts, summaries, and models are not uploaded. Network access is used when you choose to download the app or its models and optional runtime packages.
+**Your meetings stay on your PC.** No account is required, no bot joins the call, and meeting audio, transcripts, summaries, and models are not uploaded. Network access is used for app/model/runtime downloads and, if you connect a provider, to fetch your calendar schedule. Recording and AI processing stay on this PC.
 
 ## What Biscotti can do
 
@@ -11,7 +11,7 @@ Free, private meeting transcription and review for Windows. Biscotti captures yo
 - **Create optional local summaries.** If Ollama is installed on this PC and has a local model available, Biscotti can generate a meeting title, summary, and action items. Choose a local model and summary preferences in Settings. Without Ollama or a model, recording and transcription still work.
 - **Review and manage meetings.** Browse and search meeting history, read speaker-labeled transcripts, summaries and notes, play the saved microphone or speaker track, correct speaker labels, and retry or recover interrupted processing. Speaker labels are best effort; overlapping speech may not be separated.
 - **Take notes and control recording.** Add notes linked to the recording time, use the tray menu or configurable global shortcut to start and stop, and enable silence-based auto-stop.
-- **Use local calendar context (optional).** Choose an `.ics` calendar file to see upcoming events and start a recording from an event. Biscotti reads the file on this PC; calendar data is not sent to a calendar provider.
+- **Connect calendars (optional).** Add Google Calendar or Outlook / Microsoft 365 subscription links, Apple iCloud with an app-specific password, classic Outlook, or local `.ics` files. Preview the next seven days of meetings, join or record from an event, and link/change/remove event context in a recording. Saved access is protected with Windows DPAPI. See the [calendar setup guide](docs/calendar-setup.md).
 - **Connect a local MCP client (optional).** The read-only Biscotti MCP server lets compatible clients search saved meetings and read meeting details or transcript pages. It does not record audio or call remote services. See the [MCP setup guide](docs/mcp-server.md).
 - **Import and export meeting text.** Use CSV for meeting collections and Markdown for an individual meeting. Exports and clipboard copies are plain text and do not include audio; Biscotti asks before creating an export.
 
@@ -38,7 +38,7 @@ The [Windows release guide](docs/windows-release.md) explains installation, upda
 1. Install Biscotti using the [Windows release guide](docs/windows-release.md), then launch `Biscotti.Win.exe`.
 2. Download a Whisper model in the app. Large v3 Turbo is selected by default; choose Small in Settings if you prefer the smaller download.
 3. To enable summaries, install Ollama, run `ollama pull gemma3:4b`, then choose an installed local model in Biscotti Settings.
-4. Select your audio devices, optionally select the meeting app and a local calendar file, then start recording.
+4. Select your audio devices, optionally select the meeting app and connect calendars, then start recording.
 
 ## Privacy and where data is stored
 
@@ -46,6 +46,7 @@ Biscotti stores app data under `%LOCALAPPDATA%\BiscottiWin`:
 
 - `Meetings\<guid>\meeting.json` and `meeting.md` contain meeting text and are protected with Windows DPAPI for your Windows user.
 - `Meetings\<guid>\mic.wav` and `sys.wav` contain authenticated encrypted audio; their keys are protected with DPAPI.
+- `Calendar\connections.dpapi` contains encrypted provider links and app-specific credentials, when configured.
 - `Models\` contains downloaded Whisper and speaker models. Optional GPU runtime files are stored under `runtimes\`.
 
 Protected meeting files are tied to the Windows profile that created them. DPAPI CurrentUser protects data at rest from other Windows users; it does not protect it from software already running as your account. When you export or copy meeting text, the destination is unencrypted, so choose a location with the privacy you need. See the [meeting data protection decision](docs/specs/dpapi-meeting-data-at-rest.md).

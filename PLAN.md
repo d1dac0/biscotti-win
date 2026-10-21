@@ -269,3 +269,14 @@ none skipped. Synthetic UI review confirmed the transport stays visible on the
 transcript and notes tabs. Fake-output coverage exercises seek bounds, channel
 switching, stop-before-delete, and disposal; encrypted frame tampering remains
 covered by the encrypted playback checks.
+
+## Calendar functionality and UI parity (#109)
+
+1. Document native Windows source support and privacy/association semantics in docs/specs/calendar-parity-windows.md.
+2. Add a shared seven-day calendar service, live classic Outlook source and file fallback; preserve current meetings, recurrence, calendar choice and safe conference detection.
+3. Replace verbose upcoming cards with compact rows and event previews; connect calendars and link/change/remove recording associations, including encrypted snapshots for later summaries.
+4. Add regression checks for recurrence, time zones, source changes, current events, safe links, calendar filters and recording association. Run build/check and inspect synthetic UI; deliver one PR.
+
+Baseline: origin/main a9bbbc8. Build succeeded with existing NAudio/inexact-read warnings; full check result recorded below when complete.
+\nUser expanded #109 to Google Calendar, Microsoft 365/Outlook.com and Apple iCloud, then requested self-managed provider setup. Google/Microsoft use guided subscription links; iCloud uses an app-specific password and CalDAV. Provider access is protected with DPAPI. OAuth registrations are not required or claimed; account sign-in integrations are not part of this chosen setup.\nBaseline check passed: 188 Core tests and 1 Windows flow test.\n
+#109 implementation is locally verified: tools/build.ps1 and tools/check.ps1 passed with 219 Core tests and 1 WPF flow test, none skipped. Synthetic light/dark event previews, provider setup, wide sidebar, narrow stacked schedule, scrollable connection settings and recording associations were inspected. Live provider-account and classic Outlook data checks are skipped pending user connection. See docs/calendar-parity-verification.md; delivery is tracked by issue #109.
