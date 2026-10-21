@@ -6,7 +6,9 @@ public sealed record CalendarMeeting(
     string Title,
     DateTimeOffset StartsAt,
     DateTimeOffset EndsAt,
-    IReadOnlyList<string> Attendees)
+    IReadOnlyList<string> Attendees,
+    string? Description = null,
+    string? Location = null)
 {
     public string AttendeesDisplay => Attendees.Count == 0 ? "No attendee names in this event" : string.Join(", ", Attendees);
 }

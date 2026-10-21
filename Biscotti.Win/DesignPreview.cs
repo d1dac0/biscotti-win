@@ -33,9 +33,9 @@ internal static class DesignPreview
         var argument = args.FirstOrDefault(a => a == "--design-preview" || a.StartsWith("--design-preview=", StringComparison.Ordinal));
         if (argument is null) return false;
         var mode = argument.Contains('=') ? argument.Split('=', 2)[1] : "history";
-        if (!new[] { "setup", "empty", "history", "recording", "processing", "failure", "review", "transfer", "speakers", "recovery", "tray" }.Contains(mode))
+        if (!new[] { "setup", "empty", "history", "recording", "processing", "failure", "review", "transfer", "speakers", "recovery", "tray", "calendar" }.Contains(mode))
         {
-            MessageBox.Show("Preview states: setup, empty, history, recording, processing, failure, review, transfer, speakers, recovery, tray.", "Design preview");
+            MessageBox.Show("Preview states: setup, empty, history, recording, processing, failure, review, transfer, speakers, recovery, tray, calendar.", "Design preview");
             System.Windows.Application.Current.Shutdown();
             return true;
         }
@@ -121,8 +121,15 @@ public partial class MainWindow
             {
                 new CalendarMeeting("synthetic-atlas", "Atlas design review",
                     new DateTimeOffset(2026, 10, 20, 16, 0, 0, TimeSpan.Zero),
-                    new DateTimeOffset(2026, 10, 20, 16, 30, 0, TimeSpan.Zero), new[] { "Alex", "Jordan" }),
+                    new DateTimeOffset(2026, 10, 20, 16, 30, 0, TimeSpan.Zero), new[] { "Alex", "Jordan" },
+                    "Review the prototype, decide next steps, and assign owners.", "Room 3"),
             };
+        if (mode is "calendar" or "tray")
+        {
+            _settings.CalendarFilePath = "synthetic.ics";
+            _settings.CalendarTrayNavigation = true;
+            _upcomingMeetings = (UpcomingMeetingsList.ItemsSource as IEnumerable<CalendarMeeting>)?.ToArray() ?? [];
+        }
         ChooseCalendarButton.IsEnabled = RefreshCalendarButton.IsEnabled = false;
         if (mode == "processing")
         {

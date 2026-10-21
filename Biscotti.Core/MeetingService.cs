@@ -24,6 +24,7 @@ public sealed class MeetingService : IAsyncDisposable
     private readonly SavedMeetingProcessor _savedMeetingProcessor;
     private readonly object _meetingMutationLock = new();
     private Meeting? _current;
+    private CalendarMeeting? _currentCalendarMeeting;
     private LiveTranscriptionWorker? _liveTranscription;
     private Timer? _autoStopTimer;
     private int _stopProcessStarted;
@@ -62,6 +63,7 @@ public sealed class MeetingService : IAsyncDisposable
     {
         if (State != RecordingState.Idle) throw new InvalidOperationException("A meeting is already in progress.");
         _loopbackSilence.Reset();
+        _currentCalendarMeeting = calendarMeeting;
         SetState(RecordingState.Starting, "Checking audio devices…");
         var previousMeeting = _current;
         Meeting? pendingMeeting = null;
@@ -96,6 +98,7 @@ public sealed class MeetingService : IAsyncDisposable
         }
         catch
         {
+            _currentCalendarMeeting = null;
             try
             {
                 _recorder.Stop();
@@ -298,7 +301,7 @@ public sealed class MeetingService : IAsyncDisposable
         var chunkProgress = new Progress<(int chunk, int total)>(p =>
             SetState(RecordingState.Summarizing,
                 $"Writing summary with local AI (part {p.chunk} of {p.total})…"));
-        var raw = await ollama.SummarizeMeetingAsync(_current.Transcript, chunkProgress, ct, _current.CalendarAttendees);
+        var raw = await ollama.SummarizeMeetingAsync(_current.Transcript, chunkProgress, ct, _current.CalendarAttendees, _currentCalendarMeeting);
         if (!string.IsNullOrWhiteSpace(raw))
         {
             var (summary, actions, title, participantMatches) = SummaryParser.Parse(raw);
@@ -324,6 +327,7 @@ public sealed class MeetingService : IAsyncDisposable
             : "Done — transcript and summary saved locally.");
         MeetingStore.Save(_current);
         CurrentMeetingUpdated?.Invoke(_current);
+        _currentCalendarMeeting = null;
     }
 
     private static async Task<List<TranscriptLine>> TranscribeSavedAudioAsync(
