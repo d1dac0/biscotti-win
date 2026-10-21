@@ -84,7 +84,7 @@ test and synthetic preview; see the review/evidence index for final validation.
 - #87 Rendered Markdown and timestamp navigation (P2; audio jumps need #88).
 - #88 Persistent audio transport and seeking (P2; decision: [persistent audio transport](docs/specs/persistent-audio-transport.md)).
 - #89 Mac runtime visual validation and Windows dark/appearance polish (P3).
-- #90 Microphone echo-control evaluation (P2).
+- #90 Microphone echo control (P2; decision: [Windows microphone echo control](docs/specs/windows-microphone-echo-control.md); evidence: [echo-control verification](docs/echo-control-verification.md)).
 
 ## Active work: guided local model setup and AI settings (#80)
 

@@ -9,6 +9,7 @@ namespace Biscotti.Core.Audio;
 public sealed class DualChannelRecorder : IDisposable
 {
     private WaveInEvent? _mic;
+    private WasapiRecorder? _aecMic;
     private WasapiRecorder? _loopback;
     private MMDevice? _loopDevice;
     private EncryptedAudioWriter? _micWav;
@@ -24,6 +25,8 @@ public sealed class DualChannelRecorder : IDisposable
     private long _micBytes;
     private long _sysBytes;
     private bool _acceptAudio;
+    private string _loopbackStatus = "";
+    private string _echoCancellationStatus = "";
     private volatile bool _stopping = true;
     private volatile string? _startupFailure;
 
@@ -32,11 +35,13 @@ public sealed class DualChannelRecorder : IDisposable
     public (long mic, long sys) TotalBytes => (Interlocked.Read(ref _micBytes), Interlocked.Read(ref _sysBytes));
     public string? MicError { get; private set; }
     public string DeviceWarning { get { lock (_warningGate) return string.Join("\n", _warnings); } }
-    public string SystemAudioStatus { get; private set; } = "";
+    public string SystemAudioStatus => string.Join(" · ", new[] { _loopbackStatus, _echoCancellationStatus }
+        .Where(status => !string.IsNullOrWhiteSpace(status)));
     public event Action<byte[], int, int>? LoopbackSamplesAvailable;
 
     public void Start(string micWavPath, string sysWavPath, int? preferredMicDevice = null,
         string? preferredSpeakerId = null, string? preferredMicName = null,
+        string? preferredMicEndpointId = null,
         int? targetProcessId = null, string? targetProcessName = null, int? osBuild = null,
         bool allowSystemWideLoopback = false)
     {
@@ -49,7 +54,8 @@ public sealed class DualChannelRecorder : IDisposable
         Interlocked.Exchange(ref _sysBytes, 0);
         lock (_warningGate) _warnings.Clear();
         MicError = null;
-        SystemAudioStatus = "";
+        _loopbackStatus = "";
+        _echoCancellationStatus = "";
         _startupFailure = null;
         _microphoneReady.Reset();
         MicWavPath = micWavPath;
@@ -58,6 +64,8 @@ public sealed class DualChannelRecorder : IDisposable
         var micId = RandomChannelId();
         var sysId = RandomChannelId();
         while (sysId == micId) sysId = RandomChannelId();
+        var micEndpointId = preferredMicEndpointId ?? devices.Microphones.First(m =>
+            m.Index == preferredMicDevice && m.Name == preferredMicName).EndpointId;
         try
         {
             _micWav = new EncryptedAudioWriter(micWavPath, meetingKey, micId);
@@ -65,7 +73,8 @@ public sealed class DualChannelRecorder : IDisposable
             lock (_audioGate) _acceptAudio = true;
             _stopping = false;
             CaptureStartup.Start(
-                () => StartMic(preferredMicDevice!.Value),
+                () => StartMic(preferredMicDevice!.Value, micEndpointId, preferredSpeakerId,
+                    osBuild ?? Environment.OSVersion.Version.Build),
                 () => StartLoopback(preferredSpeakerId, targetProcessId, targetProcessName,
                     osBuild ?? Environment.OSVersion.Version.Build, allowSystemWideLoopback),
                 () => _microphoneReady.Wait(TimeSpan.FromSeconds(2)) && _startupFailure is null,
@@ -93,8 +102,33 @@ public sealed class DualChannelRecorder : IDisposable
         return BinaryPrimitives.ReadUInt32BigEndian(id);
     }
 
-    private void StartMic(int deviceNumber)
+    private void StartMic(int deviceNumber, string? endpointId, string? preferredSpeakerId, int osBuild)
     {
+        if (WindowsEchoCancellationPolicy.CanUseReferenceControl(osBuild, endpointId))
+        {
+            try
+            {
+                OpenAecMicrophone(endpointId!, preferredSpeakerId);
+                _echoCancellationStatus = "Windows echo cancellation is active for the selected microphone and output.";
+                return;
+            }
+            catch (Exception)
+            {
+                var failedRecorder = _aecMic;
+                _aecMic = null;
+                try { failedRecorder?.StopRecording(); } catch { }
+                try { failedRecorder?.Dispose(); } catch { }
+                _micDecimator = null;
+                _startupFailure = null;
+                _microphoneReady.Reset();
+                _echoCancellationStatus = "Windows echo cancellation is unavailable for this microphone or output. Microphone audio is recorded without echo cancellation.";
+            }
+        }
+        else
+        {
+            _echoCancellationStatus = WindowsEchoCancellationPolicy.UnavailableStatus(osBuild, endpointId);
+        }
+
         try { OpenMicrophone(deviceNumber, AudioConfig.SampleRate); }
         catch (Exception first)
         {
@@ -108,6 +142,56 @@ public sealed class DualChannelRecorder : IDisposable
                 MicError = $"Microphone refused 16 kHz ({first.Message}) and 48 kHz ({fallback.Message}).";
                 throw new AudioDeviceException(MicError + " Check its connection and permissions, then choose devices again.", fallback);
             }
+        }
+    }
+
+    private void OpenAecMicrophone(string endpointId, string? preferredSpeakerId)
+    {
+        using var enumerator = new MMDeviceEnumerator();
+        using var microphone = enumerator.GetDevice(endpointId);
+        var referenceOutput = GetLoopDevice(preferredSpeakerId);
+        var recorder = new WasapiRecorderBuilder()
+            .WithDevice(microphone)
+            .WithFormat(WaveFormat.CreateIeeeFloatWaveFormat(48000, 1))
+            .WithCommunicationsMode()
+            .WithEchoCancellationReferenceEndpoint(referenceOutput)
+            .Build();
+        _micChannels = 1;
+        _micDecimator = new AntiAliasDecimator(48000);
+        recorder.DataAvailable += (buffer, _, _, _) =>
+        {
+            lock (_audioGate)
+            {
+                if (!_acceptAudio || !ReferenceEquals(recorder, _aecMic) || buffer.Length == 0) return;
+                var pcm = _micDecimator!.ProcessFloat(buffer.ToArray(), buffer.Length, _micChannels);
+                if (pcm.Length == 0) return;
+                _micWav!.Append(pcm);
+                Interlocked.Add(ref _micBytes, pcm.Length);
+                _microphoneReady.Set();
+            }
+        };
+        recorder.RecordingStopped += (_, _) =>
+        {
+            if (_stopping) return;
+            const string message = "Microphone capture stopped unexpectedly. Stop and choose devices before starting a new recording.";
+            _startupFailure = message;
+            _microphoneReady.Set();
+            AddWarning(message);
+        };
+        _aecMic = recorder;
+        try
+        {
+            recorder.StartRecording();
+            if (!_microphoneReady.Wait(TimeSpan.FromSeconds(2)) || _startupFailure is not null)
+                throw new AudioDeviceException("Windows microphone processing did not provide audio within the startup interval.");
+        }
+        catch
+        {
+            _aecMic = null;
+            try { recorder.StopRecording(); } catch { }
+            recorder.Dispose();
+            _micDecimator = null;
+            throw;
         }
     }
 
@@ -162,14 +246,14 @@ public sealed class DualChannelRecorder : IDisposable
             ConfigureLoopback,
             recorder => recorder.StartRecording(),
             recorder => recorder.Dispose(),
-            reason => SystemAudioStatus = $"App-only capture could not start ({reason}). Capturing all speaker audio; mute notifications and music.");
+            reason => _loopbackStatus = $"App-only capture could not start ({reason}). Capturing all speaker audio; mute notifications and music.");
 
-        if (useProcessLoopback && string.IsNullOrEmpty(SystemAudioStatus))
-            SystemAudioStatus = $"Capturing {processName} and its child processes only.";
-        else if (string.IsNullOrEmpty(SystemAudioStatus) && osBuild < 22000)
-            SystemAudioStatus = "Windows 10 captures all speaker audio. Mute notifications and music during the meeting.";
-        else if (string.IsNullOrEmpty(SystemAudioStatus))
-            SystemAudioStatus = "Capturing all speaker audio. Choose a meeting app for app-only capture.";
+        if (useProcessLoopback && string.IsNullOrEmpty(_loopbackStatus))
+            _loopbackStatus = $"Capturing {processName} and its child processes only.";
+        else if (string.IsNullOrEmpty(_loopbackStatus) && osBuild < 22000)
+            _loopbackStatus = "Windows 10 captures all speaker audio. Mute notifications and music during the meeting.";
+        else if (string.IsNullOrEmpty(_loopbackStatus))
+            _loopbackStatus = "Capturing all speaker audio. Choose a meeting app for app-only capture.";
     }
 
     private static WasapiRecorder CreateProcessLoopbackRecorder(int processId)
@@ -203,6 +287,7 @@ public sealed class DualChannelRecorder : IDisposable
 
     private MMDevice GetLoopDevice(string? preferredId)
     {
+        if (_loopDevice is not null) return _loopDevice;
         using var enumerator = new MMDeviceEnumerator();
         var device = string.IsNullOrEmpty(preferredId)
             ? enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Console)
@@ -238,14 +323,17 @@ public sealed class DualChannelRecorder : IDisposable
         _deviceWatch?.Dispose();
         _deviceWatch = null;
         try { _mic?.StopRecording(); } catch { }
+        try { _aecMic?.StopRecording(); } catch { }
         try { _loopback?.StopRecording(); } catch { }
         // Retain the existing bounded flush interval before closing the encrypted writers.
-        if (_mic is not null || _loopback is not null) Thread.Sleep(200);
+        if (_mic is not null || _aecMic is not null || _loopback is not null) Thread.Sleep(200);
         lock (_audioGate) _acceptAudio = false;
         try { _mic?.Dispose(); } catch { }
+        try { _aecMic?.Dispose(); } catch { }
         try { _loopback?.Dispose(); } catch { }
         try { _loopDevice?.Dispose(); } catch { }
         _mic = null;
+        _aecMic = null;
         _loopback = null;
         _loopDevice = null;
         lock (_audioGate)
@@ -264,7 +352,7 @@ public sealed class DualChannelRecorder : IDisposable
     }
 }
 
-public record WaveInDeviceInfo(int Index, string Name);
+public record WaveInDeviceInfo(int Index, string Name, string? EndpointId = null);
 
 internal static class LoopbackCapturePolicy
 {

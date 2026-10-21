@@ -96,6 +96,21 @@ public class AudioPipelineTests
     }
 
     [Fact]
+    public void AecMicrophoneFloatPath_MonoCaptureKeepsSixteenKhzTiming()
+    {
+        var input = Enumerable.Range(0, InRate)
+            .SelectMany(i => BitConverter.GetBytes((float)(0.5 * Math.Sin(2 * Math.PI * 1000 * i / InRate))))
+            .ToArray();
+        var decimator = new AntiAliasDecimator(InRate);
+
+        var pcm = decimator.ProcessFloat(input, input.Length, 1);
+        var samples = ToShorts(pcm);
+
+        Assert.InRange(samples.Length, OutRate - 2, OutRate + 2);
+        Assert.True(GoertzelPower(samples, 1000, OutRate) > Math.Sqrt(samples.Average(s => (double)s * s)) * 0.5);
+    }
+
+    [Fact]
     public void Int16Path_MicFallback_ConvertsCorrectly()
     {
         var decimator = new AntiAliasDecimator(InRate);
@@ -117,6 +132,39 @@ public class AudioPipelineTests
         var samples = ToShorts(pcm);
         var expected = seconds * OutRate;
         Assert.InRange(samples.Length, expected - 4, expected + 4);
+    }
+
+    [Fact]
+    public void EchoLeakageAnalyzer_FindsDelayedSyntheticSpeakerLeakage()
+    {
+        const int delay = 73;
+        const double gain = 0.25;
+        var reference = Enumerable.Range(0, 4000).Select(i =>
+            (float)(0.45 * Math.Sin(2 * Math.PI * 440 * i / OutRate)
+                + 0.2 * Math.Sin(2 * Math.PI * 997 * i / OutRate))).ToArray();
+        var microphone = new float[reference.Length + delay];
+        for (var i = 0; i < reference.Length; i++) microphone[i + delay] = (float)(reference[i] * gain);
+
+        var measurement = EchoLeakageAnalyzer.Measure(reference, microphone, 160);
+
+        Assert.Equal(delay, measurement.DelaySamples);
+        Assert.InRange(measurement.Gain, gain - 0.001, gain + 0.001);
+        Assert.InRange(measurement.Correlation, 0.999, 1.0);
+        Assert.InRange(measurement.GainDecibels, -12.05, -12.0);
+    }
+
+    [Fact]
+    public void EchoLeakageAnalyzer_DistinguishesSyntheticHeadphoneAndSpeakerLeakage()
+    {
+        var reference = Enumerable.Range(0, 3000)
+            .Select(i => (float)(0.5 * Math.Sin(2 * Math.PI * 700 * i / OutRate))).ToArray();
+        var speakerMic = reference.Select(sample => sample * 0.2f).ToArray();
+        var headphoneMic = reference.Select(sample => sample * 0.002f).ToArray();
+
+        var speaker = EchoLeakageAnalyzer.Measure(reference, speakerMic, 0);
+        var headphones = EchoLeakageAnalyzer.Measure(reference, headphoneMic, 0);
+
+        Assert.True(speaker.GainDecibels - headphones.GainDecibels > 39);
     }
 }
 

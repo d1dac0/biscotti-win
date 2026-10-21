@@ -109,6 +109,7 @@ public sealed class MeetingService : IAsyncDisposable
                 MeetingStore.Save(meeting);
                 _recorder.Start(Path.Combine(dir, "mic.wav"), Path.Combine(dir, "sys.wav"),
                     _settings.MicDeviceIndex, _settings.SpeakerDeviceId, _settings.MicDeviceName,
+                    _settings.MicDeviceEndpointId,
                     targetProcessId, targetProcessName, allowSystemWideLoopback: allowSystemWideLoopback);
                 _liveTranscription = new LiveTranscriptionWorker(
                     Path.Combine(dir, "mic.wav"), Path.Combine(dir, "sys.wav"),
