@@ -13,8 +13,8 @@ high-contrast mode turns off.
 
 ## Completed checks
 
-- `tools/build.ps1`: passed, 0 errors. The existing `WaveOutEvent` obsolete
-  warnings remain.
+- `tools/build.ps1`: passed, 0 errors. Existing `WaveInEvent`/`WaveOutEvent`
+  obsolete warnings and three `CA2022` analyzer warnings remain.
 - `tools/check.ps1`: passed, 171 passed, 0 failed, 0 skipped.
 - The WPF test checks light/dark switching, system-brush mappings, high-contrast
   precedence, restoration, and the existing synthetic meeting flows.
@@ -30,6 +30,10 @@ high-contrast mode turns off.
   focused element for both targets. Keyboard navigation is visibly working;
   UI Automation focus reporting remains inconsistent and needs a fix or a
   separate screen-reader evaluation.
+- In a fresh synthetic preview, Tab moved visible keyboard focus to the
+  Transcription model combo box. The UI Automation tree exposes its name, but
+  the computer-use focus field returned no focused element. This is not a
+  Narrator/screen-reader pass.
 - The UI Automation tree exposed named Settings, Search meetings and Meeting
   app audio controls. This confirms discoverable control names, not a full
   screen-reader pass.
@@ -39,6 +43,11 @@ high-contrast mode turns off.
   separately restored the full-height bar; UI Automation enabled the line
   buttons, and clicking Down moved the value 48 to 64 while Up returned it to
   48.
+- On this host, `AppsUseLightTheme=0`; the synthetic preview rendered in dark
+  mode. The Settings dialog remained scrollable with Cancel and Save visible.
+- Preview command: `dotnet run --project Biscotti.Win -- --design-preview=history`.
+  The launched executable was
+  `Biscotti.Win/bin/Debug/net10.0-windows10.0.17763.0/win-x64/Biscotti.Win.exe`.
 - `git diff --check`: passed.
 
 The preview uses only synthetic in-memory data. No recording, model download,
@@ -52,10 +61,9 @@ were not changed; high-contrast precedence is covered by the WPF resource test.
   matched Atlas setup/home/recording/review/notes/settings/menu captures and
   source-versus-render annotations remain outstanding until a macOS runtime is
   available.
-- 200% display scaling was not exercised. Windows Settings opened, but its
-  Scale control rendered without a readable current value and clicking it
-  opened the Custom scaling page. No global scale setting was changed because
-  the original value could not be verified for restoration.
+- 200% display scaling was not exercised. A read-only `GetDpiForSystem` query
+  returned 96 DPI (100% system DPI); this does not establish a 200% per-monitor
+  setup. No Windows scaling setting was changed.
 - Narrator/screen-reader behavior was not exercised. UI Automation labels and
   the visible focus outline were inspected; that evidence is not represented as
   a screen-reader pass.
