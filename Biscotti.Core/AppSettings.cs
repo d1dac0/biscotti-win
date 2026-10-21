@@ -24,6 +24,10 @@ public sealed class AppSettings
     public string? RecordingHotkey { get; set; } = "Ctrl+Alt+R";
     /// <summary>Path to the user's local iCalendar export; no calendar contents are copied or uploaded.</summary>
     public string? CalendarFilePath { get; set; }
+    /// <summary>Show a generic local-calendar notification near event start; off by default.</summary>
+    public bool CalendarStartNotifications { get; set; }
+    /// <summary>Show upcoming events and recent meetings in the tray menu.</summary>
+    public bool CalendarTrayNavigation { get; set; } = true;
 
     public string GetResolvedModelPath()
     {

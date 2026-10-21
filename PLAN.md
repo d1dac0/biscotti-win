@@ -79,7 +79,7 @@ test and synthetic preview; see the review/evidence index for final validation.
 - #82 Local cross-meeting speaker identity and correction (P2).
 - #83 Explicit local import/export/copy workflows (P2).
 - #84 Retry processing and interrupted-job recovery (P2).
-- #85 Calendar context, prompts, preferences and tray previews (P2).
+- #85 Calendar context, prompts, preferences and tray previews (P2; decision: [calendar context and tray offers](docs/specs/calendar-context-and-tray.md)).
 - #86 Activity-aware auto-stop with countdown and user control (P2).
 - #87 Rendered Markdown and timestamp navigation (P2; audio jumps need #88).
 - #88 Persistent audio transport and seeking (P2).

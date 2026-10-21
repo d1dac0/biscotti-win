@@ -131,12 +131,16 @@ public sealed class MeetingFlowTests
                     ((ComboBox)validSettings.FindName("SummaryLengthBox")).SelectedItem = "brief";
                     ((CheckBox)validSettings.FindName("AutoStopBox")).IsChecked = false;
                     ((TextBox)validSettings.FindName("GuidanceBox")).Text = "Focus on decisions.";
+                    ((System.Windows.Controls.CheckBox)validSettings.FindName("CalendarNotificationsBox")).IsChecked = true;
+                    ((System.Windows.Controls.CheckBox)validSettings.FindName("CalendarTrayBox")).IsChecked = false;
                     ((Button)validSettings.FindName("SaveButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 }));
                 Assert.True(validSettings.ShowDialog());
                 Assert.Equal("brief", savedDraft!.SummaryLength);
                 Assert.False(savedDraft.AutoStopEnabled);
                 Assert.Equal("Focus on decisions.", savedDraft.SummaryGuidance);
+                Assert.True(savedDraft.CalendarStartNotifications);
+                Assert.False(savedDraft.CalendarTrayNavigation);
                 Assert.Null(original.SummaryGuidance);
 
                 var meeting = DesignPreview.CreateMeeting();

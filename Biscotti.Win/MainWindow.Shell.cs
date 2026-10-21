@@ -14,11 +14,15 @@ public partial class MainWindow
     private Forms.NotifyIcon? _trayIcon;
     private Forms.ToolStripMenuItem? _recordMenuItem;
     private Forms.ToolStripMenuItem? _openLastMenuItem;
+    private Forms.ToolStripMenuItem? _calendarMenuItem;
+    private Forms.ToolStripMenuItem? _recentMenuItem;
     private Forms.ToolStripMenuItem? _exitMenuItem;
     private Forms.ToolStripMenuItem? _keepRecordingMenuItem;
     private GlobalHotkeyRegistration? _hotkeyRegistration;
     private string? _hotkeyRegistrationError;
     private readonly System.Windows.Threading.DispatcherTimer _shellTimer = new() { Interval = TimeSpan.FromMilliseconds(750) };
+    private readonly HashSet<string> _notifiedCalendarEventIds = new(StringComparer.Ordinal);
+    private string? _trayCalendarSignature;
     private bool _shellInitialized;
 
     public void InitializeShell()
@@ -29,10 +33,14 @@ public partial class MainWindow
         var menu = new Forms.ContextMenuStrip();
         _recordMenuItem = new Forms.ToolStripMenuItem("Start recording", null, (_, _) => ToggleRecordingFromShell());
         _openLastMenuItem = new Forms.ToolStripMenuItem("Open last meeting", null, (_, _) => OpenLastMeetingFromShell());
+        _calendarMenuItem = new Forms.ToolStripMenuItem("Upcoming meetings");
+        _recentMenuItem = new Forms.ToolStripMenuItem("Recent meetings");
         menu.Items.Add(_recordMenuItem);
         _keepRecordingMenuItem = new Forms.ToolStripMenuItem("Keep recording", null, (_, _) => KeepRecording_Click(this, new RoutedEventArgs())) { Visible = false };
         menu.Items.Add(_keepRecordingMenuItem);
         menu.Items.Add(_openLastMenuItem);
+        menu.Items.Add(_calendarMenuItem);
+        menu.Items.Add(_recentMenuItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(new Forms.ToolStripMenuItem("Settings", null, (_, _) => OpenSettingsFromShell()));
         menu.Items.Add(new Forms.ToolStripSeparator());
@@ -114,6 +122,52 @@ public partial class MainWindow
         if (_openLastMenuItem is not null)
             _openLastMenuItem.Enabled = state == RecordingState.Idle && MeetingList.Items.Count > 0;
         if (_exitMenuItem is not null) _exitMenuItem.Enabled = state == RecordingState.Idle;
+        UpdateCalendarTrayMenus(state);
+    }
+
+    private void UpdateCalendarTrayMenus(RecordingState state)
+    {
+        if (_calendarMenuItem is null || _recentMenuItem is null) return;
+        var enabled = _settings.CalendarTrayNavigation && !string.IsNullOrWhiteSpace(_settings.CalendarFilePath);
+        var recent = _historyDocuments.Select(document => document.Meeting).OrderByDescending(meeting => meeting.StartedUtc)
+            .Take(5).ToArray();
+        var signature = $"{enabled}:{state}:" + string.Join("|", _upcomingMeetings.Select(meeting => $"{meeting.EventId}:{meeting.Title}:{meeting.StartsAt.UtcTicks}")) + ":" +
+            string.Join("|", recent.Select(meeting => $"{meeting.Id}:{meeting.Title}:{meeting.StartedUtc.Ticks}"));
+        if (signature == _trayCalendarSignature) return;
+        _trayCalendarSignature = signature;
+        _calendarMenuItem.DropDownItems.Clear();
+        _calendarMenuItem.Enabled = enabled && state == RecordingState.Idle;
+        if (!enabled || _upcomingMeetings.Count == 0)
+            _calendarMenuItem.DropDownItems.Add(new Forms.ToolStripMenuItem(enabled ? "No upcoming meetings" : "Enable in Settings") { Enabled = false });
+        else
+            foreach (var meeting in _upcomingMeetings.Take(5))
+            {
+                var eventId = meeting.EventId;
+                var item = new Forms.ToolStripMenuItem($"Record: {meeting.Title} · {meeting.StartsAt.ToLocalTime():h:mm tt}");
+                item.Click += async (_, _) => await StartCalendarMeetingFromShellAsync(eventId);
+                _calendarMenuItem.DropDownItems.Add(item);
+            }
+
+        _recentMenuItem.DropDownItems.Clear();
+        _recentMenuItem.Enabled = _settings.CalendarTrayNavigation && state == RecordingState.Idle && recent.Length > 0;
+        if (!_settings.CalendarTrayNavigation || recent.Length == 0)
+            _recentMenuItem.DropDownItems.Add(new Forms.ToolStripMenuItem("No recent meetings") { Enabled = false });
+        else
+            foreach (var meeting in recent)
+            {
+                var id = meeting.Id;
+                var item = new Forms.ToolStripMenuItem($"{meeting.Title} · {meeting.StartedUtc.ToLocalTime():MMM d}");
+                item.Click += (_, _) => OpenMeetingFromShell(id);
+                _recentMenuItem.DropDownItems.Add(item);
+            }
+    }
+
+    private async Task StartCalendarMeetingFromShellAsync(string eventId)
+    {
+        ShowFromShell();
+        var requested = _upcomingMeetings.FirstOrDefault(meeting => meeting.EventId == eventId);
+        if (requested is null) { await RefreshCalendarMeetingsAsync(); return; }
+        await StartRecordingAsync(requested);
     }
 
     private void ToggleRecordingFromShell()
@@ -153,6 +207,15 @@ public partial class MainWindow
         {
             MessageBox.Show(this, ex.Message, "Could not open last meeting", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void OpenMeetingFromShell(Guid id)
+    {
+        ShowFromShell();
+        var meeting = _historyDocuments.Select(document => document.Meeting).FirstOrDefault(item => item.Id == id);
+        if (meeting is null) { StatusText.Text = "That recent meeting is no longer available."; return; }
+        new MeetingWindow(meeting) { Owner = this }.ShowDialog();
+        RefreshList();
     }
 
     private void OpenSettingsFromShell()
@@ -197,6 +260,8 @@ public partial class MainWindow
             _settings.SummaryGuidance = candidate.SummaryGuidance;
             _meetings.SetAutoStopEnabled(candidate.AutoStopEnabled);
             AutoStopBox.IsChecked = candidate.AutoStopEnabled;
+            _settings.CalendarStartNotifications = candidate.CalendarStartNotifications;
+            _settings.CalendarTrayNavigation = candidate.CalendarTrayNavigation;
             _hotkeyRegistrationError = null;
             StatusText.Text = runtimeChanged ? "Settings saved locally. Restart Biscotti to apply the runtime change." : "Settings saved locally.";
             return null;
@@ -230,6 +295,25 @@ public partial class MainWindow
             AppNotificationManager.Default.Show(notification);
         }
         catch { /* Windows may disable app notifications or Focus Assist may suppress delivery. */ }
+    }
+
+    private void MaybeShowCalendarNotification()
+    {
+        if (!_settings.CalendarStartNotifications || string.IsNullOrWhiteSpace(_settings.CalendarFilePath)) return;
+        var now = DateTimeOffset.Now;
+        foreach (var meeting in _upcomingMeetings.Where(meeting => meeting.StartsAt >= now && meeting.StartsAt <= now.AddMinutes(5)))
+        {
+            if (!_notifiedCalendarEventIds.Add(meeting.EventId)) continue;
+            try
+            {
+                var notification = new AppNotificationBuilder()
+                    .AddText("Calendar event starting")
+                    .AddText("Open Biscotti Win to review your current local calendar.")
+                    .BuildNotification();
+                AppNotificationManager.Default.Show(notification);
+            }
+            catch { /* Windows notification settings or Focus Assist may suppress delivery. */ }
+        }
     }
 
     private void DisposeShell()

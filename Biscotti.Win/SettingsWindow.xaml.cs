@@ -35,6 +35,8 @@ public partial class SettingsWindow : Window
         SummaryLengthBox.ItemsSource = SummaryPreferences.Lengths;
         SummaryLengthBox.SelectedItem = settings.SummaryLength;
         GuidanceBox.Text = settings.SummaryGuidance ?? "";
+        CalendarNotificationsBox.IsChecked = settings.CalendarStartNotifications;
+        CalendarTrayBox.IsChecked = settings.CalendarTrayNavigation;
         Loaded += async (_, _) => await RefreshModelsAsync();
         Closed += (_, _) => { _lifetime.Cancel(); _download?.Cancel(); };
         UpdateWhisperStatus();
@@ -88,6 +90,8 @@ public partial class SettingsWindow : Window
         _draft.WhisperRuntime = RuntimeBox.SelectedValue as string ?? "cpu";
         _draft.SummaryLength = SummaryLengthBox.SelectedItem as string ?? "";
         _draft.SummaryGuidance = GuidanceBox.Text.Trim();
+        _draft.CalendarStartNotifications = CalendarNotificationsBox.IsChecked == true;
+        _draft.CalendarTrayNavigation = CalendarTrayBox.IsChecked == true;
         if (OllamaBox.SelectedItem is LocalSummaryModel local) _draft.OllamaModel = local.Name;
         var error = new SummaryPreferences(_draft.SummaryLength, _draft.SummaryGuidance).Validate();
         error ??= _saveSettings(_draft);

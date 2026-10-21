@@ -37,4 +37,18 @@ public sealed class AppSettingsTests
     {
         Assert.Null(Biscotti.Core.Transcription.WhisperTranscriber.BuildInitialPrompt("  ;\r\n, "));
     }
+
+    [Fact]
+    public void CalendarPreferencesDefaultSafelyAndRoundTrip()
+    {
+        var defaults = JsonSerializer.Deserialize<AppSettings>("{}");
+        Assert.NotNull(defaults);
+        Assert.False(defaults.CalendarStartNotifications);
+        Assert.True(defaults.CalendarTrayNavigation);
+
+        var settings = new AppSettings { CalendarStartNotifications = true, CalendarTrayNavigation = false };
+        var roundTrip = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(settings));
+        Assert.True(roundTrip!.CalendarStartNotifications);
+        Assert.False(roundTrip.CalendarTrayNavigation);
+    }
 }

@@ -210,6 +210,8 @@ namespace Biscotti.Win
                 CalendarSourceText.Text = "";
                 CalendarEmptyText.Text = "Choose a local .ics file to see events in the next 24 hours.";
                 CalendarEmptyText.Visibility = Visibility.Visible;
+                RemoveCalendarButton.IsEnabled = false;
+                MaybeShowCalendarNotification();
                 return;
             }
 
@@ -219,18 +221,22 @@ namespace Biscotti.Win
                 _upcomingMeetings = meetings;
                 UpcomingMeetingsList.ItemsSource = meetings;
                 CalendarSourceText.Text = $"Local calendar: {System.IO.Path.GetFileName(path)} · refreshed {DateTime.Now:t}";
+                RemoveCalendarButton.IsEnabled = true;
                 CalendarEmptyText.Text = meetings.Count == 0
                     ? "No upcoming meetings in the next 24 hours."
                     : "";
                 CalendarEmptyText.Visibility = meetings.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                MaybeShowCalendarNotification();
             }
             catch (Exception ex)
             {
                 _upcomingMeetings = Array.Empty<CalendarMeeting>();
                 UpcomingMeetingsList.ItemsSource = _upcomingMeetings;
                 CalendarSourceText.Text = $"Local calendar: {System.IO.Path.GetFileName(path)}";
+                RemoveCalendarButton.IsEnabled = true;
                 CalendarEmptyText.Text = "The selected calendar file could not be read. Choose another .ics file or check that it is available.";
                 CalendarEmptyText.Visibility = Visibility.Visible;
+                MaybeShowCalendarNotification();
                 if (reportErrors)
                     MessageBox.Show(this, ex.Message, "Calendar file unavailable", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
@@ -240,6 +246,13 @@ namespace Biscotti.Win
         {
             if (_designPreview) return;
             if (_meetings.State != RecordingState.Idle) return;
+            if (string.IsNullOrWhiteSpace(_settings.CalendarFilePath))
+            {
+                var consent = MessageBox.Show(this,
+                    "Biscotti will read the .ics file you choose on this PC to show upcoming events and offer to start a recording. Calendar contents are not uploaded or sent to a calendar provider. Starting a recording from an event may use its description, location, and invitee names as untrusted context for the local summary. Invitees are not treated as attendees.",
+                    "Use a local calendar?", MessageBoxButton.OKCancel, MessageBoxImage.Information);
+                if (consent != MessageBoxResult.OK) return;
+            }
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
                 Title = "Choose a local iCalendar export",
@@ -259,6 +272,30 @@ namespace Biscotti.Win
             {
                 _settings.CalendarFilePath = previous;
                 MessageBox.Show(this, ex.Message, "Could not save calendar selection", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void RemoveCalendarButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_designPreview || _meetings.State != RecordingState.Idle) return;
+            var previous = _settings.CalendarFilePath;
+            _settings.CalendarFilePath = null;
+            try
+            {
+                _settings.Save();
+                _upcomingMeetings = Array.Empty<CalendarMeeting>();
+                UpcomingMeetingsList.ItemsSource = _upcomingMeetings;
+                CalendarSourceText.Text = "";
+                CalendarEmptyText.Text = "Calendar removed. Choose a local .ics file to see events in the next 24 hours.";
+                CalendarEmptyText.Visibility = Visibility.Visible;
+                RemoveCalendarButton.IsEnabled = false;
+                _trayCalendarSignature = null;
+                await RefreshCalendarMeetingsAsync();
+            }
+            catch (Exception ex)
+            {
+                _settings.CalendarFilePath = previous;
+                MessageBox.Show(this, ex.Message, "Could not remove calendar selection", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

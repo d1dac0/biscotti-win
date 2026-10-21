@@ -59,6 +59,7 @@
             <WrapPanel DockPanel.Dock="Right">
                 <Button x:Name="ChooseCalendarButton" Content="Choose .ics file" Click="ChooseCalendarButton_Click"/>
                 <Button x:Name="RefreshCalendarButton" Content="Refresh" Margin="8,0,0,0" Click="RefreshCalendarButton_Click"/>
+                <Button x:Name="RemoveCalendarButton" Content="Remove" Margin="8,0,0,0" Click="RemoveCalendarButton_Click"/>
             </WrapPanel>
             <TextBlock Text="UPCOMING" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" Margin="0"/>
         </DockPanel>
@@ -76,6 +77,8 @@
                                         <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/>
                                         <TextBlock Style="{StaticResource Hint}" Text="{Binding StartsAt, StringFormat={}{0:ddd, MMM d · h:mm tt}}"/>
                                         <TextBlock Style="{StaticResource Hint}" Text="{Binding AttendeesDisplay}"/>
+                                        <TextBlock Style="{StaticResource Hint}" Text="{Binding Location}" TextWrapping="Wrap"/>
+                                        <TextBlock Style="{StaticResource Hint}" Text="{Binding Description}" TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </DockPanel>
                             </Border>
