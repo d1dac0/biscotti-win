@@ -4,3 +4,6 @@ obj/
 .vs/
 .worktrees/
 .engram/
+
+# Cursor project MCP config (personal, absolute paths)
+.cursor/mcp.json
