@@ -25,6 +25,11 @@
             <TextBlock Style="{StaticResource Hint}">
                 <Run Text="{Binding StartedUtc, Converter={StaticResource LocalStartTime}}"/>
             </TextBlock>
+            <WrapPanel x:Name="TransferControls" Margin="0,12,0,0">
+                <Button x:Name="CopyMarkdownButton" Content="Copy Markdown…" Click="CopyMarkdown_Click" Margin="0,0,8,4"/>
+                <Button x:Name="ExportMarkdownButton" Content="Export Markdown…" Click="ExportMarkdown_Click" Margin="0,0,8,4"/>
+            </WrapPanel>
+            <TextBlock x:Name="TransferStatus" Text="Copy and export include current edits as unencrypted text, without audio." Style="{StaticResource Hint}" AutomationProperties.LiveSetting="Polite"/>
         </StackPanel>
 
         <TabControl x:Name="ReviewTabs" Grid.Row="1" Margin="0,20,0,0" SelectionChanged="ReviewTabs_SelectionChanged">

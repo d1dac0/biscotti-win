@@ -189,3 +189,21 @@ accuracy evaluation are outside this change; synthetic evidence is not calibrati
 
 #82 local verification complete: build/check passed, 133 tests; native synthetic
 speaker-correction walkthrough passed. See [verification](docs/speaker-memory-verification.md).
+
+## Active work: explicit local meeting transfer (#83)
+
+**Status:** Implemented and locally verified; PR delivery in progress.
+Decision: [local meeting transfer](docs/specs/local-meeting-transfer.md).
+How to use the [CSV and Markdown workflows](docs/local-meeting-transfer.md).
+
+CSV v1 import preview reports valid, duplicate and invalid rows before writing;
+valid meetings stage as protected text and never overwrite existing IDs. History
+exports all saved meeting text, and the meeting review copies or exports current
+Markdown after plaintext disclosures. Synthetic regression coverage includes
+timestamps, multiline quoting, duplicates, bad rows, storage protection and
+cancellation.
+
+Verification after merging `origin/main` at `4236417`: `tools/build.ps1` and
+`tools/check.ps1` passed, with 144 Core tests and 1 Windows flow test, none
+skipped. The synthetic import-preview and meeting-review screens were inspected.
+Existing obsolete NAudio API and inexact test-read compiler warnings remain.

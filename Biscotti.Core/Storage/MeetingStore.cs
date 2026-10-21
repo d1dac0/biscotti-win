@@ -44,6 +44,28 @@ public static class MeetingStore
     {
         var dir = MeetingDir(m.Id);
         Directory.CreateDirectory(dir);
+        SaveToDirectory(m, dir);
+    }
+
+    /// <summary>Publish a fully protected import without replacing an existing directory.</summary>
+    internal static void SaveNew(Meeting m)
+    {
+        Directory.CreateDirectory(Root);
+        var staging = Path.Combine(Root, $".import-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(staging);
+        try
+        {
+            SaveToDirectory(m, staging);
+            Directory.Move(staging, MeetingDir(m.Id));
+        }
+        finally
+        {
+            if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+        }
+    }
+
+    private static void SaveToDirectory(Meeting m, string dir)
+    {
         var jsonPath = Path.Combine(dir, "meeting.json");
         var json = JsonSerializer.SerializeToUtf8Bytes(m, JsonOpts);
         try { ProtectedMeetingText.WriteProtectedAtomically(jsonPath, json); }
@@ -83,6 +105,7 @@ public static class MeetingStore
 
         foreach (var dir in directories)
         {
+            if (Path.GetFileName(dir).StartsWith(".import-", StringComparison.Ordinal)) continue;
             var json = Path.Combine(dir, "meeting.json");
             var markdown = Path.Combine(dir, "meeting.md");
             var hasJson = TryGetFile(json);

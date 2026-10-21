@@ -44,6 +44,7 @@ namespace Biscotti.Win
             NotesBox.Visibility = isLiveRecording ? Visibility.Collapsed : Visibility.Visible;
             NotesGrid.RowDefinitions[2].Height = isLiveRecording ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
             AudioTab.IsEnabled = !isLiveRecording;
+            TransferControls.IsEnabled = !isLiveRecording;
             UpdateSpeakerControls();
             RefreshTimestampedNotes();
             UpdateReviewState();
@@ -121,6 +122,7 @@ namespace Biscotti.Win
             NotesBox.Visibility = Visibility.Visible;
             NotesGrid.RowDefinitions[2].Height = new GridLength(1, GridUnitType.Star);
             AudioTab.IsEnabled = true;
+            TransferControls.IsEnabled = true;
             UpdateSpeakerControls();
             TitleBox.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty)?.UpdateTarget();
             SummaryBox.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty)?.UpdateTarget();

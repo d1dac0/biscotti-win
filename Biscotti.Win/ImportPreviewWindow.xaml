@@ -1,0 +1,20 @@
+<Window x:Class="Biscotti.Win.ImportPreviewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Preview CSV import" Width="620" Height="440" MinWidth="480" MinHeight="360"
+        WindowStartupLocation="CenterOwner" Style="{StaticResource {x:Type Window}}">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/><RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <TextBlock Text="Review before importing" FontFamily="Georgia" FontSize="24" TextWrapping="Wrap"/>
+        <TextBlock x:Name="CountsText" Grid.Row="1" Margin="0,16,0,12" TextWrapping="Wrap" FontWeight="SemiBold"/>
+        <TextBlock Grid.Row="2" Text="Import valid rows as protected local meetings? Existing meetings stay intact. No audio is imported. Cancel leaves your history unchanged." Style="{StaticResource Hint}"/>
+        <ListBox x:Name="ErrorsList" Grid.Row="3" Margin="0,12" AutomationProperties.Name="Invalid CSV rows"/>
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="CancelButton" Content="Cancel" IsCancel="True" Click="Cancel_Click"/>
+            <Button x:Name="ImportButton" Content="Import valid rows" Style="{StaticResource PrimaryButton}" Margin="12,0,0,0" Click="Import_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

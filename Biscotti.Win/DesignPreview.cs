@@ -14,9 +14,9 @@ internal static class DesignPreview
         var argument = args.FirstOrDefault(a => a == "--design-preview" || a.StartsWith("--design-preview=", StringComparison.Ordinal));
         if (argument is null) return false;
         var mode = argument.Contains('=') ? argument.Split('=', 2)[1] : "history";
-        if (!new[] { "setup", "empty", "history", "recording", "processing", "failure", "review", "speakers", "tray" }.Contains(mode))
+        if (!new[] { "setup", "empty", "history", "recording", "processing", "failure", "review", "transfer", "speakers", "tray" }.Contains(mode))
         {
-            MessageBox.Show("Preview states: setup, empty, history, recording, processing, failure, review, speakers, tray.", "Design preview");
+            MessageBox.Show("Preview states: setup, empty, history, recording, processing, failure, review, transfer, speakers, tray.", "Design preview");
             System.Windows.Application.Current.Shutdown();
             return true;
         }
@@ -29,6 +29,10 @@ internal static class DesignPreview
         window.Show();
         if (mode == "recording") window.TogglePreviewRecording();
         if (mode == "review") new MeetingWindow(CreateMeeting(), designPreview: true) { Owner = window }.Show();
+        if (mode == "transfer")
+            new ImportPreviewWindow(new Biscotti.Core.Storage.ImportPreview(new[] { CreateMeeting() }, 2,
+                new[] { "Row 4: invalid fields, dates or timeline. Check the CSV format." }))
+                { Owner = window }.ShowDialog();
         if (mode == "speakers")
         {
             var review = new MeetingWindow(CreateMeeting(), designPreview: true) { Owner = window };
