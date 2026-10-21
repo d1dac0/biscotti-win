@@ -51,4 +51,15 @@ public sealed class AppSettingsTests
         Assert.True(roundTrip!.CalendarStartNotifications);
         Assert.False(roundTrip.CalendarTrayNavigation);
     }
+
+    [Fact]
+    public void MicrophoneEndpointIdRoundTripsAndDefaultsForExistingSettings()
+    {
+        Assert.Null(JsonSerializer.Deserialize<AppSettings>("{}")!.MicDeviceEndpointId);
+
+        var settings = new AppSettings { MicDeviceEndpointId = "windows-microphone-endpoint" };
+        var roundTrip = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(settings));
+
+        Assert.Equal(settings.MicDeviceEndpointId, roundTrip!.MicDeviceEndpointId);
+    }
 }

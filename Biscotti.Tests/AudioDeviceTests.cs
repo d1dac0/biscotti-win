@@ -26,6 +26,49 @@ public sealed class AudioDeviceTests
     }
 
     [Fact]
+    public void SavedMicrophoneEndpointMustStillMatchWhenItWasRecorded()
+    {
+        var settings = new AppSettings
+        {
+            MicDeviceIndex = 1, MicDeviceName = "Headset", MicDeviceEndpointId = "mic-endpoint"
+        };
+        var devices = new AudioDeviceSnapshot(
+            [new(0, "Webcam"), new(1, "Headset", "mic-endpoint")],
+            Snapshot().Outputs, "speakers");
+        AudioDevices.Validate(settings, devices);
+        Assert.Throws<AudioDeviceException>(() => AudioDevices.Validate(settings,
+            devices with { Microphones = [new(0, "Webcam"), new(1, "Headset", "replacement-mic")] }));
+    }
+
+    [Fact]
+    public void WaveInMicrophoneMapsOnlyToOneMatchingCoreAudioEndpoint()
+    {
+        var microphones = new[] { new WaveInDeviceInfo(0, "Headset"), new WaveInDeviceInfo(1, "Webcam") };
+        var endpoints = new[] { new CaptureEndpointInfo("mic-1", "headset"), new CaptureEndpointInfo("mic-2", "Webcam") };
+        var attached = MicrophoneEndpointMatcher.Attach(microphones, endpoints);
+        Assert.Equal("mic-1", attached[0].EndpointId);
+        Assert.Equal("mic-2", attached[1].EndpointId);
+
+        var ambiguous = MicrophoneEndpointMatcher.Attach(microphones,
+            [new("mic-1", "Headset"), new("mic-2", "HEADSET")]);
+        Assert.Null(ambiguous[0].EndpointId);
+    }
+
+    [Theory]
+    [InlineData(22620, "mic", false)]
+    [InlineData(22621, null, false)]
+    [InlineData(22621, "mic", true)]
+    public void WindowsAecNeedsModernWindowsAndAUniqueCaptureEndpoint(int build, string? micId, bool expected) =>
+        Assert.Equal(expected, WindowsEchoCancellationPolicy.CanUseReferenceControl(build, micId));
+
+    [Fact]
+    public void AecUnavailableStatusSaysMicrophoneIsRecordedWithoutCancellation()
+    {
+        Assert.Contains("without echo cancellation", WindowsEchoCancellationPolicy.UnavailableStatus(22620, "mic"));
+        Assert.Contains("without echo cancellation", WindowsEchoCancellationPolicy.UnavailableStatus(22621, null));
+    }
+
+    [Fact]
     public void MissingExplicitOutputDoesNotFallBackToAvailableDefault()
     {
         Assert.Throws<AudioDeviceException>(() => AudioDevices.Validate(Selection("unplugged"), Snapshot()));
@@ -51,6 +94,25 @@ public sealed class AudioDeviceTests
         Assert.Contains(warnings, w => w.Contains("microphone"));
         Assert.Contains(warnings, w => w.Contains("default output changed"));
         Assert.Empty(tracker.Observe(changed));
+    }
+
+    [Fact]
+    public void ChangedMicrophoneEndpointIsReportedEvenWhenItsNameIsReused()
+    {
+        var settings = new AppSettings
+        {
+            MicDeviceIndex = 1, MicDeviceName = "Headset", MicDeviceEndpointId = "original-mic"
+        };
+        var initial = new AudioDeviceSnapshot(
+            [new(0, "Webcam"), new(1, "Headset", "original-mic")],
+            Snapshot().Outputs, "speakers");
+        var tracker = new AudioDeviceChangeTracker(settings, initial);
+        var replacement = initial with
+        {
+            Microphones = [new(0, "Webcam"), new(1, "Headset", "replacement-mic")]
+        };
+
+        Assert.Contains("microphone", Assert.Single(tracker.Observe(replacement)));
     }
 
     [Fact]

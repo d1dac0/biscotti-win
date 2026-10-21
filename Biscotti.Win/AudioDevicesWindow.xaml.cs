@@ -17,7 +17,7 @@ public partial class AudioDevicesWindow : Window
         _settings = settings;
         _canEdit = canEdit;
         _designPreview = designPreview;
-        LoadChoices(settings.MicDeviceIndex, settings.MicDeviceName, settings.SpeakerDeviceId);
+        LoadChoices(settings.MicDeviceIndex, settings.MicDeviceName, settings.MicDeviceEndpointId, settings.SpeakerDeviceId);
         SetEditingEnabled(canEdit());
     }
 
@@ -29,7 +29,7 @@ public partial class AudioDevicesWindow : Window
         if (!enabled) DeviceMessage.Text = "Finish recording and processing before changing devices.";
     }
 
-    private void LoadChoices(int? micIndex, string? micName, string? outputId)
+    private void LoadChoices(int? micIndex, string? micName, string? micEndpointId, string? outputId)
     {
         _pendingOutputId = outputId;
         try
@@ -42,7 +42,8 @@ public partial class AudioDevicesWindow : Window
             OutputBox.ItemsSource = devices.Outputs;
             MicrophoneBox.SelectedItem = micIndex is null && micName is null
                 ? devices.Microphones.FirstOrDefault()
-                : devices.Microphones.FirstOrDefault(m => m.Index == micIndex && m.Name == micName);
+                : devices.Microphones.FirstOrDefault(m => m.Index == micIndex && m.Name == micName
+                    && (micEndpointId is null || m.EndpointId == micEndpointId));
             OutputBox.SelectedItem = devices.Outputs.FirstOrDefault(o => o.Id == outputId);
             DeviceMessage.Text = MicrophoneBox.SelectedItem is null || OutputBox.SelectedItem is null
                 ? "A saved device is unavailable. Choose an available device, then save."
@@ -62,6 +63,7 @@ public partial class AudioDevicesWindow : Window
         var mic = MicrophoneBox.SelectedItem as WaveInDeviceInfo;
         var output = OutputBox.SelectedItem as OutputDeviceChoice;
         LoadChoices(mic?.Index ?? _settings.MicDeviceIndex, mic?.Name ?? _settings.MicDeviceName,
+            mic is null ? _settings.MicDeviceEndpointId : mic.EndpointId,
             output is null ? _pendingOutputId : output.Id);
     }
 
@@ -76,17 +78,20 @@ public partial class AudioDevicesWindow : Window
         }
         try
         {
-            var choice = new AppSettings { MicDeviceIndex = mic.Index, MicDeviceName = mic.Name, SpeakerDeviceId = output.Id };
+            var choice = new AppSettings { MicDeviceIndex = mic.Index, MicDeviceName = mic.Name,
+                MicDeviceEndpointId = mic.EndpointId, SpeakerDeviceId = output.Id };
             AudioDevices.Validate(choice, AudioDevices.Enumerate());
-            var previous = (_settings.MicDeviceIndex, _settings.MicDeviceName, _settings.SpeakerDeviceId);
+            var previous = (_settings.MicDeviceIndex, _settings.MicDeviceName,
+                _settings.MicDeviceEndpointId, _settings.SpeakerDeviceId);
             try
             {
-                (_settings.MicDeviceIndex, _settings.MicDeviceName, _settings.SpeakerDeviceId) = (mic.Index, mic.Name, output.Id);
+                (_settings.MicDeviceIndex, _settings.MicDeviceName, _settings.MicDeviceEndpointId, _settings.SpeakerDeviceId) =
+                    (mic.Index, mic.Name, mic.EndpointId, output.Id);
                 _settings.Save();
             }
             catch
             {
-                (_settings.MicDeviceIndex, _settings.MicDeviceName, _settings.SpeakerDeviceId) = previous;
+                (_settings.MicDeviceIndex, _settings.MicDeviceName, _settings.MicDeviceEndpointId, _settings.SpeakerDeviceId) = previous;
                 throw;
             }
             DialogResult = true;
