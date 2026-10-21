@@ -49,6 +49,7 @@ internal static class DesignPreview
         if (mode == "recording") window.TogglePreviewRecording();
         if (mode == "countdown")
         {
+            window.ShowPreviewTray();
             window.UpdateRecordingPresentationForCountdownPreview();
             window.UpdateAutoStopNotice(new Biscotti.Core.Audio.AutoStopNotice(true, true, false, 30));
         }

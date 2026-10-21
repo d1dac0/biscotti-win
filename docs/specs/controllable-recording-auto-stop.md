@@ -1,6 +1,6 @@
 # Controllable recording auto-stop
 
-**Status:** In Progress
+**Status:** Accepted
 
 Issue: #86. Supersedes [recording-auto-stop.md](recording-auto-stop.md).
 
@@ -58,3 +58,23 @@ in-person safety. No audio or application usage data leaves the machine.
 1. Add a timestamp-driven controller and lifecycle regression tests.
 2. Connect recording lifecycle, saved preference, countdown notice and tray action.
 3. Run build/check, inspect synthetic countdown and Settings, and record results.
+
+## Verification
+
+After merging the calendar changes from `origin/main` at `ac8fda6`, Release
+build and check passed: 170 Core/MCP tests and 1 WPF flow test, none skipped.
+Existing obsolete NAudio API and inexact test-read warnings remain.
+
+Synthetic timestamps cover long quiet calls, full countdown expiry, one-shot
+stop requests, cancellation including a queued stop, new output, disabled
+preferences, delayed ticks, microphone-only capture, and end/begin lifecycle.
+WPF checks cover window hide/reopen, notice cleanup, Settings cancellation
+and draft save. Native Windows inspection confirmed the countdown, Keep
+recording cancellation and the complete Settings explanation.
+
+Try without audio, models or saved changes:
+`dotnet run --project Biscotti.Win -c Release -- --design-preview=countdown`.
+The countdown is a static synthetic preview; click Keep recording to clear it.
+Live hardware capture and real meeting-app close/reopen were not exercised;
+there is deliberately no app-exit signal in the policy. Extended cross-app
+activity measurements remain deferred until a watcher is proposed.
