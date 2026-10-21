@@ -58,6 +58,9 @@ a pull request (see Git). Never work directly on `main`.
 
 ## How to work with the user
 
+- **Keep the session title current.** When starting new work or switching to a
+  different issue or task, update the session title to name the work currently
+  underway. Keep it concise and revise it when the active work changes.
 - **The user decides; the agent recommends.** Every question carries exactly
   one recommended option with a one-line why, so the user can make the call or
   override. Never a neutral listing, never a silent decision.
@@ -114,6 +117,9 @@ git worktree add .worktrees/issue-N -b issue-N-slug
   NVIDIA GPU), and new behavior rides with test additions in the same PR.
 - A change is not done until the build, the check, and a manual look at the
   result pass (launch the app for UI-affecting changes).
+- Whenever a human test is needed, run `dotnet run --project Biscotti.Win`
+  from the repository root, then give the user the full path to the generated
+  `Biscotti.Win.exe`. Use the actual path reported by the build; do not guess it.
 
 ## Data and configuration
 
