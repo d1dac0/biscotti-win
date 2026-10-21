@@ -552,8 +552,32 @@ namespace Biscotti.Win
         private void OpenSelectedMeeting()
         {
             if (SelectedHistoryMeeting is not Meeting meeting) return;
-            new MeetingWindow(meeting, designPreview: _designPreview) { Owner = this }.ShowDialog();
+            var window = new MeetingWindow(meeting, designPreview: _designPreview,
+                recoverInterruptedMeeting: _designPreview ? PreviewRecoverAsync : _meetings.RecoverInterruptedMeetingAsync,
+                retryTranscription: _designPreview ? PreviewRetryTranscriptionAsync : _meetings.RetrySavedTranscriptionAsync,
+                regenerateSummary: _designPreview ? PreviewRegenerateSummaryAsync : _meetings.RegenerateSavedSummaryAsync)
+            { Owner = this };
+            window.ShowDialog();
             if (!_designPreview) RefreshList();
+        }
+
+        private static Task PreviewRecoverAsync(Meeting meeting, CancellationToken ct)
+        {
+            meeting.EndedUtc ??= DateTime.UtcNow;
+            meeting.ProcessingStatus = MeetingProcessingStatus.TranscriptionPending;
+            return Task.CompletedTask;
+        }
+
+        private static Task PreviewRetryTranscriptionAsync(Meeting meeting, CancellationToken ct)
+        {
+            meeting.ProcessingStatus = MeetingProcessingStatus.SummaryPending;
+            return Task.CompletedTask;
+        }
+
+        private static Task PreviewRegenerateSummaryAsync(Meeting meeting, CancellationToken ct)
+        {
+            meeting.ProcessingStatus = MeetingProcessingStatus.Complete;
+            return Task.CompletedTask;
         }
 
         private void MeetingList_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)

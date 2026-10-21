@@ -108,6 +108,17 @@
                                 <StackPanel>
                                     <TextBlock Text="{Binding Meeting.Title}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"/>
                                     <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0" Text="{Binding Meeting.StartedUtc, Converter={StaticResource LocalStartTime}}"/>
+                                    <TextBlock Text="{Binding ProcessingNotice}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+                                                <Setter Property="TextWrapping" Value="Wrap"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ProcessingNotice}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                     <TextBlock Style="{StaticResource Hint}">
                                         <Run Text="{Binding Meeting, Converter={StaticResource MeetingDuration}, Mode=OneWay}"/>
                                         <Run Text=" · "/>

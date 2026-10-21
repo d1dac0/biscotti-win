@@ -21,11 +21,13 @@ public sealed class MeetingService : IAsyncDisposable
     private readonly DualChannelRecorder _recorder = new();
     private readonly LoopbackSilenceMonitor _loopbackSilence = new(AutoStopSilenceTimeout);
     private readonly AppSettings _settings;
+    private readonly SavedMeetingProcessor _savedMeetingProcessor;
     private readonly object _meetingMutationLock = new();
     private Meeting? _current;
     private LiveTranscriptionWorker? _liveTranscription;
     private Timer? _autoStopTimer;
     private int _stopProcessStarted;
+    private int _savedProcessingStarted;
 
     public RecordingState State { get; private set; } = RecordingState.Idle;
     public event Action<RecordingState, string>? StateChanged;
@@ -35,6 +37,7 @@ public sealed class MeetingService : IAsyncDisposable
     public MeetingService(AppSettings settings)
     {
         _settings = settings;
+        _savedMeetingProcessor = new SavedMeetingProcessor(settings);
         _recorder.LoopbackSamplesAvailable += OnLoopbackSamplesAvailable;
     }
 
@@ -75,6 +78,8 @@ public sealed class MeetingService : IAsyncDisposable
                     meeting.Title = calendarMeeting.Title;
                     meeting.CalendarAttendees = calendarMeeting.Attendees.ToList();
                 }
+                meeting.ProcessingStatus = MeetingProcessingStatus.Recording;
+                MeetingStore.Save(meeting);
                 _recorder.Start(Path.Combine(dir, "mic.wav"), Path.Combine(dir, "sys.wav"),
                     _settings.MicDeviceIndex, _settings.SpeakerDeviceId, _settings.MicDeviceName,
                     targetProcessId, targetProcessName, allowSystemWideLoopback: allowSystemWideLoopback);
@@ -154,11 +159,50 @@ public sealed class MeetingService : IAsyncDisposable
 
         StopAutoStopTimer();
         try { await ProcessRecordingAsync(ct); }
+        catch
+        {
+            if (_current is not null)
+            {
+                _current.ProcessingStatus = _current.ProcessingStatus == MeetingProcessingStatus.Summarizing
+                    ? MeetingProcessingStatus.SummaryFailed : MeetingProcessingStatus.TranscriptionFailed;
+                try { MeetingStore.Save(_current); } catch { }
+            }
+            throw;
+        }
         finally
         {
             if (State != RecordingState.Idle)
                 SetState(RecordingState.Idle, "Processing stopped. The recorded audio remains saved locally.");
             Interlocked.Exchange(ref _stopProcessStarted, 0);
+        }
+    }
+
+    public Task RecoverInterruptedMeetingAsync(Meeting meeting, CancellationToken ct = default) =>
+        RunSavedMeetingActionAsync(meeting, RecordingState.Transcribing, "Checking saved audio…",
+            () => _savedMeetingProcessor.RecoverInterruptedAsync(meeting, ct));
+
+    public Task RetrySavedTranscriptionAsync(Meeting meeting, CancellationToken ct = default) =>
+        RunSavedMeetingActionAsync(meeting, RecordingState.Transcribing, "Retrying transcription from saved audio locally…",
+            () => _savedMeetingProcessor.RetryTranscriptionAsync(meeting, ct));
+
+    public Task RegenerateSavedSummaryAsync(Meeting meeting, CancellationToken ct = default) =>
+        RunSavedMeetingActionAsync(meeting, RecordingState.Summarizing, "Regenerating the summary with local AI…",
+            () => _savedMeetingProcessor.RegenerateSummaryAsync(meeting, ct));
+
+    private async Task RunSavedMeetingActionAsync(Meeting meeting, RecordingState state, string message, Func<Task> action)
+    {
+        if (State != RecordingState.Idle || Interlocked.CompareExchange(ref _savedProcessingStarted, 1, 0) != 0)
+            throw new InvalidOperationException("Finish the current meeting before retrying saved processing.");
+        try
+        {
+            SetState(state, message);
+            await action();
+            CurrentMeetingUpdated?.Invoke(meeting);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _savedProcessingStarted, 0);
+            SetState(RecordingState.Idle, "Saved meeting processing finished.");
         }
     }
 
@@ -182,6 +226,7 @@ public sealed class MeetingService : IAsyncDisposable
     {
         var (micPath, sysPath) = _recorder.Stop();
         _current!.EndedUtc = DateTime.UtcNow;
+        _current.ProcessingStatus = MeetingProcessingStatus.Transcribing;
         MeetingStore.Save(_current);
 
         SetState(RecordingState.Transcribing, "Finishing the live transcript…");
@@ -213,7 +258,7 @@ public sealed class MeetingService : IAsyncDisposable
         catch
         {
             SetState(RecordingState.Transcribing, "Live transcription failed; retrying from the saved audio…");
-            _current.Transcript.Clear();
+            // Keep live partial lines until saved-audio transcription succeeds.
         }
         finally
         {
@@ -242,8 +287,11 @@ public sealed class MeetingService : IAsyncDisposable
         await ApplySpeakerDiarizationAsync(sysPath, systemLines, ct);
 
         CurrentMeetingUpdated?.Invoke(_current);
+        _current.ProcessingStatus = MeetingProcessingStatus.SummaryPending;
         MeetingStore.Save(_current);
 
+        _current.ProcessingStatus = MeetingProcessingStatus.Summarizing;
+        MeetingStore.Save(_current);
         SetState(RecordingState.Summarizing, "Writing summary with local AI (Ollama)…");
         using var ollama = new OllamaService(_settings.OllamaModel,
             new SummaryPreferences(_settings.SummaryLength, _settings.SummaryGuidance));
@@ -267,6 +315,9 @@ public sealed class MeetingService : IAsyncDisposable
         }
 
         SpeakerIntroductionResolver.Apply(_current.Transcript);
+
+        _current.ProcessingStatus = string.IsNullOrWhiteSpace(raw)
+            ? MeetingProcessingStatus.SummaryFailed : MeetingProcessingStatus.Complete;
 
         SetState(RecordingState.Idle, string.IsNullOrWhiteSpace(raw)
             ? "Transcript saved locally. Summary unavailable — check Ollama and the local model in Settings."

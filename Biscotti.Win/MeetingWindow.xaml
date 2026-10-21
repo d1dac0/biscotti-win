@@ -30,6 +30,16 @@
                 <Button x:Name="ExportMarkdownButton" Content="Export Markdown…" Click="ExportMarkdown_Click" Margin="0,0,8,4"/>
             </WrapPanel>
             <TextBlock x:Name="TransferStatus" Text="Copy and export include current edits as unencrypted text, without audio." Style="{StaticResource Hint}" AutomationProperties.LiveSetting="Polite"/>
+            <Border x:Name="ProcessingPanel" Background="{DynamicResource WashBrush}" CornerRadius="6" Padding="12" Margin="0,10,0,0" Visibility="Collapsed">
+                <StackPanel>
+                    <TextBlock x:Name="ProcessingStatusText" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button x:Name="RecoverAudioButton" Content="Recover saved audio" Click="RecoverAudio_Click" Margin="0,0,8,4" Visibility="Collapsed"/>
+                        <Button x:Name="RetryTranscriptionButton" Content="Retry transcription" Click="RetryTranscription_Click" Margin="0,0,8,4" Visibility="Collapsed"/>
+                        <Button x:Name="RegenerateSummaryButton" Content="Generate summary" Click="RegenerateSummary_Click" Margin="0,0,8,4" Visibility="Collapsed"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
         </StackPanel>
 
         <TabControl x:Name="ReviewTabs" Grid.Row="1" Margin="0,20,0,0" SelectionChanged="ReviewTabs_SelectionChanged">
