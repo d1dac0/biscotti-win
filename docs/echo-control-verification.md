@@ -29,6 +29,14 @@ The WPF app launched successfully on Windows build 26200. The meeting was not
 started, so this confirms startup only, not AEC hardware support or acoustic
 performance.
 
+User-reported hardware observation (2026-10-21): both audio channels were heard
+correctly, with no echo or loopback noticed. The user did not see an explicit
+AEC-started status. This confirms the observed playback/channel behavior for
+that run, but does not establish whether Windows AEC activated or measure
+acoustic leakage reduction. During recording, the main window shows the AEC
+status in its “Recording health” line; repeat the check there if AEC activation
+needs to be confirmed.
+
 For the walkthrough, select the same microphone and output used by the call,
 record the same synthetic speech sample once through speakers and once through
 headphones, then compare the microphone channel playback/transcript and confirm
