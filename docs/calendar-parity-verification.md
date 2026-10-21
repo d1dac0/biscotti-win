@@ -30,7 +30,8 @@ partial provider failures, DPAPI credential round trips and disconnecting,
 snapshot serialization, failed-save rollback and preserved speaker/title edits.
 
 WPF flow checks exercise stale-event rejection and fresh-event resolution,
-preview isolation, empty pickers, all three provider setup screens, calendar
+preview isolation, dismissed previews during delayed Record/Join resolution,
+empty pickers, all three provider setup screens, calendar
 link/change/remove and save-failure states, and disabling association changes
 while processing. Wide/narrow layout checks keep the calendar schedule usable.
 

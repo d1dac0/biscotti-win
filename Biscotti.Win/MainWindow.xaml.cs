@@ -293,7 +293,8 @@ namespace Biscotti.Win
             await StartRecordingAsync(selectedMeeting);
         }
 
-        private async Task StartRecordingAsync(CalendarMeeting? calendarMeeting = null, bool allowSystemWideCapture = false)
+        private async Task StartRecordingAsync(CalendarMeeting? calendarMeeting = null, bool allowSystemWideCapture = false,
+            bool calendarValidated = false)
         {
             if (_meetings.State != RecordingState.Idle || _recording || _calendarStartPending || _calendarConfigurationOpen) return;
             if (!ModelStore.IsDownloaded(CurrentOrPreferredModel()))
@@ -309,7 +310,7 @@ namespace Biscotti.Win
                 DeviceWarningText.Visibility = Visibility.Collapsed;
                 if (calendarMeeting is not null)
                 {
-                    await RefreshCalendarMeetingsAsync();
+                    if (!calendarValidated) await RefreshCalendarMeetingsAsync();
                     calendarMeeting = _upcomingMeetings.FirstOrDefault(m => m.EventId == calendarMeeting.EventId);
                     if (calendarMeeting is null)
                     {

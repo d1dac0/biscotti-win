@@ -162,7 +162,7 @@ public partial class MainWindow
         if (sender is not Button { Tag: CalendarMeeting ev }) return;
         new CalendarEventWindow([ev], ResolveUpcomingEventAsync, async fresh =>
         {
-            await StartRecordingAsync(fresh);
+            await StartRecordingAsync(fresh, calendarValidated: true);
             if (!_recording) throw new InvalidOperationException("Recording did not start.");
         }, designPreview: _designPreview) { Owner = this }.Show();
     }

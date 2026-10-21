@@ -32,6 +32,22 @@ internal static class CalendarChecks
         Assert.Contains("no longer available", ((TextBlock)stale.FindName("EventStatus")).Text);
         stale.Close();
 
+        foreach (var join in new[] { false, true })
+        {
+            var pending = new TaskCompletionSource<CalendarMeeting?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var dismissed = new CalendarEventWindow([ev], _ => pending.Task, _ =>
+            {
+                invoked = true;
+                return Task.CompletedTask;
+            }, openConference: _ => invoked = true);
+            dismissed.Show();
+            var action = dismissed.ActAsync(join);
+            dismissed.Close();
+            pending.SetResult(ev);
+            Await(action);
+            Assert.False(invoked);
+        }
+
         var updated = ev with { Description = "Fresh calendar content" };
         CalendarMeeting? used = null;
         var fresh = new CalendarEventWindow([ev], _ => Task.FromResult<CalendarMeeting?>(updated), e =>
@@ -153,6 +169,17 @@ internal static class CalendarChecks
         Directory.CreateDirectory(directory);
         using var file = File.Create(Path.Combine(directory, name + ".png"));
         encoder.Save(file);
+    }
+
+    private static void Await(Task task)
+    {
+        if (!task.IsCompleted)
+        {
+            var frame = new DispatcherFrame();
+            _ = task.ContinueWith(_ => frame.Continue = false, TaskScheduler.FromCurrentSynchronizationContext());
+            Dispatcher.PushFrame(frame);
+        }
+        task.GetAwaiter().GetResult();
     }
 
     private sealed class NeverRead : ICalendarSource

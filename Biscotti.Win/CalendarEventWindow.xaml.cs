@@ -10,16 +10,20 @@ public partial class CalendarEventWindow : Window
     private readonly Func<CalendarMeeting, Task<CalendarMeeting?>> _resolve;
     private readonly Func<CalendarMeeting, Task> _action;
     private readonly bool _designPreview;
+    private readonly Action<Uri> _openConference;
     private bool _busy;
+    private bool _dismissed;
 
     public CalendarEventWindow(IReadOnlyList<CalendarMeeting> events,
         Func<CalendarMeeting, Task<CalendarMeeting?>> resolve, Func<CalendarMeeting, Task> action,
-        bool linkMode = false, bool designPreview = false)
+        bool linkMode = false, bool designPreview = false, Action<Uri>? openConference = null)
     {
         InitializeComponent();
         _resolve = resolve;
         _action = action;
         _designPreview = designPreview;
+        _openConference = openConference ?? (uri => Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }));
+        Closed += (_, _) => _dismissed = true;
         Heading.Text = linkMode ? "Link a calendar event" : "Upcoming meeting";
         EventActionButton.Content = linkMode ? "Link event" : "Record meeting";
         EventPicker.ItemsSource = events;
@@ -48,9 +52,9 @@ public partial class CalendarEventWindow : Window
     private async void Join_Click(object sender, RoutedEventArgs e) => await ActAsync(join: true);
     private async void Action_Click(object sender, RoutedEventArgs e) => await ActAsync(join: false);
 
-    private async Task ActAsync(bool join)
+    internal async Task ActAsync(bool join)
     {
-        if (_busy || EventPicker.SelectedItem is not CalendarMeeting ev) return;
+        if (_busy || _dismissed || EventPicker.SelectedItem is not CalendarMeeting ev) return;
         if (_designPreview)
         {
             EventStatus.Text = join ? "Preview only · no meeting link opened." : "Preview only · no recording started or event saved.";
@@ -62,6 +66,7 @@ public partial class CalendarEventWindow : Window
         try
         {
             var fresh = await _resolve(ev);
+            if (_dismissed) return;
             if (fresh is null)
             {
                 EventStatus.Text = "This event changed or is no longer available. Close this preview and refresh the calendar.";
@@ -71,7 +76,7 @@ public partial class CalendarEventWindow : Window
             {
                 var uri = fresh.ConferenceUrl;
                 if (uri is null) { EventStatus.Text = "This event no longer has a supported meeting link."; return; }
-                Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+                _openConference(uri);
             }
             else { await _action(fresh); if (IsVisible) Close(); }
         }
