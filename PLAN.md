@@ -82,7 +82,7 @@ test and synthetic preview; see the review/evidence index for final validation.
 - #85 Calendar context, prompts, preferences and tray previews (P2; decision: [calendar context and tray offers](docs/specs/calendar-context-and-tray.md)).
 - #86 Activity-aware auto-stop with countdown and user control (P2).
 - #87 Rendered Markdown and timestamp navigation (P2; audio jumps need #88).
-- #88 Persistent audio transport and seeking (P2).
+- #88 Persistent audio transport and seeking (P2; decision: [persistent audio transport](docs/specs/persistent-audio-transport.md)).
 - #89 Mac runtime visual validation and Windows dark/appearance polish (P3).
 - #90 Microphone echo-control evaluation (P2).
 
@@ -245,3 +245,19 @@ Windows activity investigation and why process/session state is not call state.
 After integrating `origin/main` at ac8fda6, build/check passed: 170 Core/MCP
 tests and 1 WPF flow test, none skipped. Native synthetic countdown cancellation
 and Settings were inspected; live hardware/cross-app measurements were skipped.
+
+## Active work: persistent audio transport (#88)
+
+**Status:** Implemented and locally verified; PR delivery in progress.
+Decision: [persistent audio transport](docs/specs/persistent-audio-transport.md).
+
+One transport stays below the meeting tabs for microphone/system selection,
+play/pause, seeking, and duration/position. Timestamp links seek the selected
+channel and start playback. The existing authenticated reader remains bounded
+and no plaintext audio is written to disk.
+
+Verification: build/check passed with 170 Core/MCP tests and 1 WPF flow test,
+none skipped. Synthetic UI review confirmed the transport stays visible on the
+transcript and notes tabs. Fake-output coverage exercises seek bounds, channel
+switching, stop-before-delete, and disposal; encrypted frame tampering remains
+covered by the encrypted playback checks.

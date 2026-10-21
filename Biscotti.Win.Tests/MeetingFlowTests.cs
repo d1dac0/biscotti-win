@@ -248,6 +248,7 @@ public sealed class MeetingFlowTests
                 Assert.False(speakers.HasUnsavedEdits);
                 speakers.Close();
                 MarkdownNotesChecks.Run();
+                AudioTransportChecks.Run();
                 main.Close();
                 app.Shutdown();
             }
