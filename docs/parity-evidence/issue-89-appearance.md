@@ -19,9 +19,15 @@ high-contrast mode turns off.
 - The WPF test checks light/dark switching, system-brush mappings, high-contrast
   precedence, restoration, and the existing synthetic meeting flows.
 - Windows synthetic Atlas preview was opened in dark app mode. Home and Settings
-  surfaces, enabled/disabled buttons, model selectors, the selector dropdown,
-  and visible keyboard focus were inspected. The selected dropdown row uses the
-  dark palette's sage highlight and dark text.
+  surfaces, enabled/disabled buttons, model selectors, and the selector
+  dropdown were inspected. The selected dropdown row uses the dark palette's
+  sage highlight and dark text.
+- Narrow-window review completed at a 666-pixel screenshot width (the WPF window
+  minimum is 680 DIPs). Home content wrapped without horizontal clipping;
+  Settings retained its vertical scroll area and visible Cancel/Save actions.
+- A Tab action at narrow width showed a visible focus outline on Settings.
+  The same observation's UI Automation focused-element field still named
+  Search meetings, so keyboard focus reporting needs a follow-up check.
 - The UI Automation tree exposed named Settings, Search meetings and Meeting
   app audio controls. This confirms discoverable control names, not a full
   screen-reader pass.
@@ -38,13 +44,12 @@ were not changed; high-contrast precedence is covered by the WPF resource test.
   matched Atlas setup/home/recording/review/notes/settings/menu captures and
   source-versus-render annotations remain outstanding until a macOS runtime is
   available.
-- 200% display scaling was not exercised. The current Windows display setting
-  was left unchanged.
+- 200% display scaling was not exercised. The desktop had a separate Biscotti
+  window from #90 active, so the global display setting was left unchanged to
+  avoid affecting that session.
 - Narrator/screen-reader behavior was not exercised. UI Automation labels and
-  keyboard focus were inspected; that evidence is not represented as a
-  screen-reader pass.
-- No narrow-window review was completed; the available remote window remained
-  at its desktop size during inspection.
+  the visible focus outline were inspected; that evidence is not represented as
+  a screen-reader pass.
 
 Related capability work remains in [#80](https://github.com/d1dac0/biscotti-win/issues/80),
 [#81](https://github.com/d1dac0/biscotti-win/issues/81),
