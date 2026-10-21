@@ -326,6 +326,7 @@ namespace Biscotti.Win
 
         private void UpdateRecordingPresentation(RecordingState state, bool? modelReady = null)
         {
+            UpdateTransferControls(state);
             var recording = state == RecordingState.Recording;
             var busy = state != RecordingState.Idle && !recording;
             ProcessingProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
@@ -586,6 +587,7 @@ namespace Biscotti.Win
             _calendarTimer.Stop();
             _historySearchCancellation?.Cancel();
             _modelDownload?.Cancel();
+            _transferCancellation?.Cancel();
             DisposeShell();
             await _meetings.DisposeAsync();
         }

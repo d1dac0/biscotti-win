@@ -47,6 +47,10 @@ public sealed class MeetingFlowTests
                 Assert.True(((Button)main.FindName("RecordButton")).IsEnabled);
                 Assert.Equal(Visibility.Collapsed, ((Button)main.FindName("ModelButton")).Visibility);
                 Assert.True(((Button)main.FindName("OpenMeetingButton")).IsEnabled);
+                Assert.True(((Button)main.FindName("ImportCsvButton")).IsEnabled);
+                Assert.True(((Button)main.FindName("ExportCsvButton")).IsEnabled);
+                ((Button)main.FindName("ExportCsvButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Contains("unencrypted CSV", ((TextBlock)main.FindName("TransferStatus")).Text);
                 var search = (TextBox)main.FindName("SearchBox");
                 var list = (ListBox)main.FindName("MeetingList");
                 search.Text = "keyboard navigation";
@@ -74,9 +78,12 @@ public sealed class MeetingFlowTests
                 Assert.Empty(list.Items);
                 Assert.Contains("Protected data", ((TextBlock)main.FindName("HistoryStatus")).Text);
                 Assert.False(((Button)main.FindName("OpenMeetingButton")).IsEnabled);
+                Assert.False(((Button)main.FindName("ImportCsvButton")).IsEnabled);
+                Assert.False(((Button)main.FindName("ExportCsvButton")).IsEnabled);
                 main.ConfigureDesignPreview("processing");
                 Await(main.ApplyHistorySearchAsync(debounce: false));
                 Assert.False(((Button)main.FindName("RecordButton")).IsEnabled);
+                Assert.False(((Button)main.FindName("ImportCsvButton")).IsEnabled);
                 Assert.Equal(Visibility.Visible, ((ProgressBar)main.FindName("ProcessingProgress")).Visibility);
                 var devices = new AudioDevicesWindow(new Biscotti.Core.AppSettings(), () => true, designPreview: true);
                 Assert.Single(((ComboBox)devices.FindName("MicrophoneBox")).Items);
@@ -124,6 +131,8 @@ public sealed class MeetingFlowTests
                 review.Dispatcher.Invoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() => { }));
                 Assert.False(((Button)review.FindName("SaveButton")).IsEnabled);
                 Assert.False(((TabItem)review.FindName("AudioTab")).IsEnabled);
+                Assert.False(((Button)review.FindName("CopyMarkdownButton")).IsEnabled);
+                Assert.False(((Button)review.FindName("ExportMarkdownButton")).IsEnabled);
                 Assert.Contains("Listening", ((TextBlock)review.FindName("TranscriptEmptyText")).Text);
                 Assert.Equal(Visibility.Collapsed, ((GroupBox)review.FindName("ActionItemsGroup")).Visibility);
                 review.StopAddingTimestampedNotes();
@@ -139,6 +148,11 @@ public sealed class MeetingFlowTests
                 review.Dispatcher.Invoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() => { }));
                 Assert.True(((Button)review.FindName("SaveButton")).IsEnabled);
                 Assert.True(((TabItem)review.FindName("AudioTab")).IsEnabled);
+                Assert.True(((Button)review.FindName("CopyMarkdownButton")).IsEnabled);
+                ((Button)review.FindName("CopyMarkdownButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Contains("unencrypted Markdown", ((TextBlock)review.FindName("TransferStatus")).Text);
+                ((Button)review.FindName("ExportMarkdownButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Contains("unencrypted Markdown file", ((TextBlock)review.FindName("TransferStatus")).Text);
                 Assert.Equal(meeting.Title, ((TextBox)review.FindName("TitleBox")).Text);
                 Assert.Equal(meeting.Summary, ((TextBox)review.FindName("SummaryBox")).Text);
                 Assert.Equal(Visibility.Collapsed, ((TextBlock)review.FindName("TranscriptEmptyText")).Visibility);
@@ -146,6 +160,21 @@ public sealed class MeetingFlowTests
                 Assert.Single(((ItemsControl)review.FindName("ActionItemsList")).Items);
                 Assert.Same(review.FindName("SummaryTab"), ((TabControl)review.FindName("ReviewTabs")).SelectedItem);
                 review.Close();
+
+                var importPreview = new Biscotti.Core.Storage.ImportPreview(new[] { DesignPreview.CreateMeeting() }, 2,
+                    new[] { "Row 4: invalid fields, dates or timeline. Check the CSV format." });
+                var importDialog = new ImportPreviewWindow(importPreview);
+                Assert.Contains("1 ready to import", ((TextBlock)importDialog.FindName("CountsText")).Text);
+                Assert.Contains("2 duplicates skipped", ((TextBlock)importDialog.FindName("CountsText")).Text);
+                Assert.Contains("1 invalid rows", ((TextBlock)importDialog.FindName("CountsText")).Text);
+                Assert.Single(((ListBox)importDialog.FindName("ErrorsList")).Items);
+                importDialog.Loaded += (_, _) => importDialog.Dispatcher.BeginInvoke(new Action(() =>
+                    ((Button)importDialog.FindName("CancelButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent))));
+                Assert.False(importDialog.ShowDialog());
+                var emptyImport = new ImportPreviewWindow(new Biscotti.Core.Storage.ImportPreview(
+                    Array.Empty<Biscotti.Core.Models.Meeting>(), 1, Array.Empty<string>()));
+                Assert.False(((Button)emptyImport.FindName("ImportButton")).IsEnabled);
+                emptyImport.Close();
                 main.Close();
                 app.Shutdown();
             }

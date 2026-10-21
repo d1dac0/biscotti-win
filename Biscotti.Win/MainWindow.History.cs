@@ -22,6 +22,7 @@ public partial class MainWindow
         _historyDocuments = meetings.Select(MeetingSearchDocument.FromMeeting).ToArray();
         _historyReady = true;
         _historyFailure = null;
+        UpdateTransferControls();
         _ = ApplyHistorySearchAsync(selectedId, debounce: false);
     }
 
@@ -31,6 +32,7 @@ public partial class MainWindow
         _historyDocuments = [];
         _historyReady = false;
         _historyFailure = "Saved meetings could not be loaded. Protected data may be unavailable. Reopen Biscotti after checking the storage error.";
+        UpdateTransferControls();
         MeetingList.ItemsSource = null;
         OpenMeetingButton.IsEnabled = false;
         HistoryStatus.Text = _historyFailure;

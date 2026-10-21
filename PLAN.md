@@ -174,3 +174,14 @@ obsolete and inexact test-read warnings remain outside this issue.
 #81 verification complete: 108 tests passed and native synthetic keyboard
 walkthrough passed. See [verification](docs/meeting-history-search-verification.md).
 Integration verification after #80: build/check passed, 123 tests.
+
+## Active work: explicit local meeting transfer (#83)
+
+1. Define CSV v1, validation, duplicate handling and protected import commit
+   ([decision](docs/specs/local-meeting-transfer.md)). Baseline build/check
+   passed at `b43780c`: 123 tests, none skipped; existing warnings only.
+2. Add import preview/counts and all-saved CSV export to history; add Markdown
+   export/copy to meeting review, with plaintext disclosures and cancellation.
+3. Test synthetic round trips, UTC/timeline timestamps, quoting, invalid rows,
+   duplicates, protected storage and cancellation; run build/check and inspect
+   the native Windows flow before one labelled PR and green-CI merge.
