@@ -1,5 +1,10 @@
 # #89 appearance and validation record
 
+Scope updated per user direction on 2026-10-21: #89 now covers Windows dark
+appearance, narrow-window layout and keyboard focus. It no longer requires Mac
+runtime captures or source-versus-render annotations, 200% display scaling or
+a Narrator pass.
+
 ## Windows appearance change
 
 The existing WPF light palette remains unchanged. When Windows app mode is
@@ -27,16 +32,13 @@ high-contrast mode turns off.
   Settings retained its vertical scroll area and visible Cancel/Save actions.
 - At normal preview size, Tab moved the visible focus outline from Settings to
   Preview tray menu. UI Automation continued to report Search meetings as the
-  focused element for both targets. Keyboard navigation is visibly working;
-  UI Automation focus reporting remains inconsistent and needs a fix or a
-  separate screen-reader evaluation.
+  focused element for both targets, so its focus signal is inconsistent.
 - In a fresh synthetic preview, Tab moved visible keyboard focus to the
   Transcription model combo box. The UI Automation tree exposes its name, but
-  the computer-use focus field returned no focused element. This is not a
-  Narrator/screen-reader pass.
+  the computer-use focus field returned no focused element; it does not
+  corroborate the visible focus reliably.
 - The UI Automation tree exposed named Settings, Search meetings and Meeting
-  app audio controls. This confirms discoverable control names, not a full
-  screen-reader pass.
+  app audio controls.
 - The synthetic Release preview exposed a dark-theme scrollbar defect: a shared
   14-DIP width and height reduced the vertical bar to a short strip and left
   its line buttons disabled. Sizing the vertical and horizontal orientations
@@ -53,20 +55,6 @@ high-contrast mode turns off.
 The preview uses only synthetic in-memory data. No recording, model download,
 meeting storage or profile changes were made. Windows high-contrast settings
 were not changed; high-contrast precedence is covered by the WPF resource test.
-
-## Checks still requiring a different environment
-
-- The Mac app cannot be run in this Windows environment. The source-derived
-  Mac diagrams in the #79 gallery are not runtime screenshots. The requested
-  matched Atlas setup/home/recording/review/notes/settings/menu captures and
-  source-versus-render annotations remain outstanding until a macOS runtime is
-  available.
-- 200% display scaling was not exercised. A read-only `GetDpiForSystem` query
-  returned 96 DPI (100% system DPI); this does not establish a 200% per-monitor
-  setup. No Windows scaling setting was changed.
-- Narrator/screen-reader behavior was not exercised. UI Automation labels and
-  the visible focus outline were inspected; that evidence is not represented as
-  a screen-reader pass.
 
 Related capability work remains in [#80](https://github.com/d1dac0/biscotti-win/issues/80),
 [#81](https://github.com/d1dac0/biscotti-win/issues/81),
