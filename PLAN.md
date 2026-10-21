@@ -228,3 +228,9 @@ API and inexact test-read warnings remain.
 Local verification: `tools/build.ps1` and `tools/check.ps1` passed with 158
 Core/MCP tests and 1 Windows flow test, none skipped. The synthetic recovery
 preview passed in the native Windows app.
+
+## Controllable auto-stop (#86)
+
+Decision and plan: [controllable recording auto-stop](docs/specs/controllable-recording-auto-stop.md).
+Baseline at dfde794: build/check passed (158 Core tests, 1 WPF flow test).
+Existing NAudio obsolete API and inexact test-read warnings remain.

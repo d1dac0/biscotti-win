@@ -15,6 +15,7 @@ public partial class MainWindow
     private Forms.ToolStripMenuItem? _recordMenuItem;
     private Forms.ToolStripMenuItem? _openLastMenuItem;
     private Forms.ToolStripMenuItem? _exitMenuItem;
+    private Forms.ToolStripMenuItem? _keepRecordingMenuItem;
     private GlobalHotkeyRegistration? _hotkeyRegistration;
     private string? _hotkeyRegistrationError;
     private readonly System.Windows.Threading.DispatcherTimer _shellTimer = new() { Interval = TimeSpan.FromMilliseconds(750) };
@@ -29,6 +30,8 @@ public partial class MainWindow
         _recordMenuItem = new Forms.ToolStripMenuItem("Start recording", null, (_, _) => ToggleRecordingFromShell());
         _openLastMenuItem = new Forms.ToolStripMenuItem("Open last meeting", null, (_, _) => OpenLastMeetingFromShell());
         menu.Items.Add(_recordMenuItem);
+        _keepRecordingMenuItem = new Forms.ToolStripMenuItem("Keep recording", null, (_, _) => KeepRecording_Click(this, new RoutedEventArgs())) { Visible = false };
+        menu.Items.Add(_keepRecordingMenuItem);
         menu.Items.Add(_openLastMenuItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(new Forms.ToolStripMenuItem("Settings", null, (_, _) => OpenSettingsFromShell()));
@@ -192,6 +195,8 @@ public partial class MainWindow
             _settings.OllamaModel = candidate.OllamaModel;
             _settings.SummaryLength = candidate.SummaryLength;
             _settings.SummaryGuidance = candidate.SummaryGuidance;
+            _meetings.SetAutoStopEnabled(candidate.AutoStopEnabled);
+            AutoStopBox.IsChecked = candidate.AutoStopEnabled;
             _hotkeyRegistrationError = null;
             StatusText.Text = runtimeChanged ? "Settings saved locally. Restart Biscotti to apply the runtime change." : "Settings saved locally.";
             return null;
@@ -229,6 +234,7 @@ public partial class MainWindow
 
     private void DisposeShell()
     {
+        UpdateAutoStopNotice(null);
         _shellTimer.Stop();
         _hotkeyRegistration?.Dispose();
         _hotkeyRegistration = null;

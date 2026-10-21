@@ -33,9 +33,9 @@ internal static class DesignPreview
         var argument = args.FirstOrDefault(a => a == "--design-preview" || a.StartsWith("--design-preview=", StringComparison.Ordinal));
         if (argument is null) return false;
         var mode = argument.Contains('=') ? argument.Split('=', 2)[1] : "history";
-        if (!new[] { "setup", "empty", "history", "recording", "processing", "failure", "review", "transfer", "speakers", "recovery", "tray" }.Contains(mode))
+        if (!new[] { "setup", "empty", "history", "recording", "countdown", "processing", "failure", "review", "transfer", "speakers", "recovery", "tray" }.Contains(mode))
         {
-            MessageBox.Show("Preview states: setup, empty, history, recording, processing, failure, review, transfer, speakers, recovery, tray.", "Design preview");
+            MessageBox.Show("Preview states: setup, empty, history, recording, countdown, processing, failure, review, transfer, speakers, recovery, tray.", "Design preview");
             System.Windows.Application.Current.Shutdown();
             return true;
         }
@@ -47,6 +47,11 @@ internal static class DesignPreview
         window.Closed += async (_, _) => await window.DisposeForShutdownAsync();
         window.Show();
         if (mode == "recording") window.TogglePreviewRecording();
+        if (mode == "countdown")
+        {
+            window.UpdateRecordingPresentationForCountdownPreview();
+            window.UpdateAutoStopNotice(new Biscotti.Core.Audio.AutoStopNotice(true, true, false, 30));
+        }
         if (mode == "review") new MeetingWindow(CreateMeeting(), designPreview: true) { Owner = window }.Show();
         if (mode == "recovery")
         {

@@ -4,6 +4,7 @@ namespace Biscotti.Core;
 
 public sealed class AppSettings
 {
+    public bool AutoStopEnabled { get; set; } = true;
     public int? MicDeviceIndex { get; set; }
     public string? MicDeviceName { get; set; }
     public string? SpeakerDeviceId { get; set; }

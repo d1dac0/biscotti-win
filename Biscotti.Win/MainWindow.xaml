@@ -42,6 +42,15 @@
                     <ComboBox x:Name="AudioAppPicker" AutomationProperties.Name="Meeting app audio"/>
                 </DockPanel>
                 <TextBlock x:Name="RecordingDurationText" Foreground="{DynamicResource DangerBrush}" FontSize="22" FontWeight="SemiBold" Margin="0,16,0,0" Visibility="Collapsed" AutomationProperties.LiveSetting="Polite"/>
+                <CheckBox x:Name="AutoStopBox" Content="Auto-stop after output silence" Margin="0,12,0,0" Click="AutoStopBox_Click"/>
+                <TextBlock Text="After output is heard, 5 quiet minutes starts a 30-second countdown. Quiet calls can trigger it; microphone-only meetings stay manual." Style="{StaticResource Hint}" Margin="0,8,0,0"/>
+                <Border x:Name="AutoStopBanner" Background="{DynamicResource WashBrush}" Padding="12" Margin="0,12,0,0" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock x:Name="AutoStopCountdownText" TextWrapping="Wrap" FontWeight="SemiBold" AutomationProperties.LiveSetting="Assertive"/>
+                        <Button x:Name="KeepRecordingButton" Content="Keep recording" Click="KeepRecording_Click" HorizontalAlignment="Left" Margin="0,8,0,0"/>
+                        <TextBlock Text="Keeps this recording running until you stop it manually." Style="{StaticResource Hint}" Margin="0,8,0,0"/>
+                    </StackPanel>
+                </Border>
                 <TextBlock x:Name="StatusText" Style="{StaticResource Hint}" Margin="0,12,0,0" Text="All local. Nothing leaves this PC." AutomationProperties.LiveSetting="Polite"/>
                 <TextBlock x:Name="DeviceWarningText" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" Margin="0,12,0,0" Visibility="Collapsed" AutomationProperties.LiveSetting="Polite"/>
             </StackPanel>

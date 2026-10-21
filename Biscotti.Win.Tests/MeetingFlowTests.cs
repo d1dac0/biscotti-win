@@ -37,6 +37,19 @@ public sealed class MeetingFlowTests
                 ThemePalette.Apply(highContrast: false);
                 Assert.Same(regularPaper, app.Resources["PaperBrush"]);
                 var main = new MainWindow(designPreview: true);
+                main.UpdateAutoStopNotice(new Biscotti.Core.Audio.AutoStopNotice(true, true, false, 30));
+                Assert.Equal(Visibility.Visible, ((Border)main.FindName("AutoStopBanner")).Visibility);
+                main.Show();
+                main.Hide(); // tray close/reopen does not recreate or reset the notice
+                main.Show();
+                Assert.Contains("30 seconds", ((TextBlock)main.FindName("AutoStopCountdownText")).Text);
+                ((Button)main.FindName("KeepRecordingButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(Visibility.Collapsed, ((Border)main.FindName("AutoStopBanner")).Visibility);
+                Assert.Equal("", ((TextBlock)main.FindName("AutoStopCountdownText")).Text);
+                main.UpdateAutoStopNotice(new Biscotti.Core.Audio.AutoStopNotice(true, true, false, 12));
+                main.UpdateAutoStopNotice(null); // output resumption/stop/shutdown removes the notice
+                Assert.Equal(Visibility.Collapsed, ((Border)main.FindName("AutoStopBanner")).Visibility);
+                Assert.Equal("", ((TextBlock)main.FindName("AutoStopCountdownText")).Text);
                 main.ConfigureDesignPreview("setup");
                 Await(main.ApplyHistorySearchAsync(debounce: false));
                 Assert.False(((Button)main.FindName("RecordButton")).IsEnabled);
@@ -95,6 +108,8 @@ public sealed class MeetingFlowTests
                 var original = new Biscotti.Core.AppSettings();
                 var saved = false;
                 var settings = new SettingsWindow(original, _ => { saved = true; return null; }, designPreview: true);
+                Assert.True(((CheckBox)settings.FindName("AutoStopBox")).IsChecked);
+                ((CheckBox)settings.FindName("AutoStopBox")).IsChecked = false;
                 settings.Show();
                 settings.Dispatcher.Invoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() => { }));
                 Assert.Equal(2, ((ComboBox)settings.FindName("WhisperBox")).Items.Count);
@@ -107,17 +122,20 @@ public sealed class MeetingFlowTests
                 settings.Close();
                 Assert.Null(original.SummaryGuidance);
                 Assert.Equal("standard", original.SummaryLength);
+                Assert.True(original.AutoStopEnabled); // cancelling leaves preference unchanged
 
                 Biscotti.Core.AppSettings? savedDraft = null;
                 var validSettings = new SettingsWindow(original, draft => { savedDraft = draft; return null; }, designPreview: true);
                 validSettings.Loaded += (_, _) => validSettings.Dispatcher.BeginInvoke(new Action(() =>
                 {
                     ((ComboBox)validSettings.FindName("SummaryLengthBox")).SelectedItem = "brief";
+                    ((CheckBox)validSettings.FindName("AutoStopBox")).IsChecked = false;
                     ((TextBox)validSettings.FindName("GuidanceBox")).Text = "Focus on decisions.";
                     ((Button)validSettings.FindName("SaveButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 }));
                 Assert.True(validSettings.ShowDialog());
                 Assert.Equal("brief", savedDraft!.SummaryLength);
+                Assert.False(savedDraft.AutoStopEnabled);
                 Assert.Equal("Focus on decisions.", savedDraft.SummaryGuidance);
                 Assert.Null(original.SummaryGuidance);
 
