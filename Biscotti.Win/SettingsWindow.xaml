@@ -51,9 +51,14 @@
             <TextBlock Text="LOCAL CALENDAR" Style="{StaticResource SectionTitle}"/>
             <Border Style="{StaticResource Card}" Margin="0,0,0,24">
                 <StackPanel>
-                    <TextBlock Text="Biscotti reads the local .ics file you choose. Calendar data stays on this PC; no provider account or calendar upload is used." Style="{StaticResource Hint}" TextWrapping="Wrap"/>
+                    <TextBlock Text="Connect Google, Outlook / Microsoft 365, iCloud, classic Outlook or a local .ics file using Calendars on the main screen. Provider schedules sync over HTTPS; audio and AI processing stay on this PC." Style="{StaticResource Hint}" TextWrapping="Wrap"/>
                     <CheckBox x:Name="CalendarNotificationsBox" Content="Show a generic notification shortly before an event" Margin="0,12,0,0" AutomationProperties.Name="Calendar start notifications"/>
                     <TextBlock Text="Notifications contain no event title or details. Windows notification settings can still suppress them." Style="{StaticResource Hint}" Margin="24,4,0,0" TextWrapping="Wrap"/>
+                    <ComboBox x:Name="CalendarNotificationModeBox" SelectedValuePath="Tag" Margin="24,8,0,8" AutomationProperties.Name="Calendar notification events">
+                        <ComboBoxItem Content="All meetings" Tag="all"/>
+                        <ComboBoxItem Content="Meetings with video conferencing" Tag="video"/>
+                        <ComboBoxItem Content="Never" Tag="never"/>
+                    </ComboBox>
                     <CheckBox x:Name="CalendarTrayBox" Content="Show upcoming events and recent meetings in the tray menu" Margin="0,12,0,0" AutomationProperties.Name="Calendar and recent tray navigation"/>
                 </StackPanel>
             </Border>

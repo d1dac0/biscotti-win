@@ -258,6 +258,7 @@ public sealed class MeetingFlowTests
                 MarkdownNotesChecks.Run();
                 AudioTransportChecks.Run();
                 BrandIconChecks.Run(main);
+                CalendarChecks.Run(main);
                 main.Close();
                 app.Shutdown();
             }

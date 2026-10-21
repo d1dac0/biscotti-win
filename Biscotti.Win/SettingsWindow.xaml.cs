@@ -36,6 +36,7 @@ public partial class SettingsWindow : Window
         SummaryLengthBox.SelectedItem = settings.SummaryLength;
         GuidanceBox.Text = settings.SummaryGuidance ?? "";
         CalendarNotificationsBox.IsChecked = settings.CalendarStartNotifications;
+        CalendarNotificationModeBox.SelectedValue = settings.CalendarNotificationMode;
         CalendarTrayBox.IsChecked = settings.CalendarTrayNavigation;
         Loaded += async (_, _) => await RefreshModelsAsync();
         Closed += (_, _) => { _lifetime.Cancel(); _download?.Cancel(); };
@@ -91,6 +92,7 @@ public partial class SettingsWindow : Window
         _draft.SummaryLength = SummaryLengthBox.SelectedItem as string ?? "";
         _draft.SummaryGuidance = GuidanceBox.Text.Trim();
         _draft.CalendarStartNotifications = CalendarNotificationsBox.IsChecked == true;
+        _draft.CalendarNotificationMode = CalendarNotificationModeBox.SelectedValue as string ?? "all";
         _draft.CalendarTrayNavigation = CalendarTrayBox.IsChecked == true;
         if (OllamaBox.SelectedItem is LocalSummaryModel local) _draft.OllamaModel = local.Name;
         var error = new SummaryPreferences(_draft.SummaryLength, _draft.SummaryGuidance).Validate();

@@ -127,7 +127,7 @@ public partial class MainWindow
     private void UpdateCalendarTrayMenus(RecordingState state)
     {
         if (_calendarMenuItem is null || _recentMenuItem is null) return;
-        var enabled = _settings.CalendarTrayNavigation && !string.IsNullOrWhiteSpace(_settings.CalendarFilePath);
+        var enabled = _settings.CalendarTrayNavigation && CalendarConnected;
         var recent = _historyDocuments.Select(document => document.Meeting).OrderByDescending(meeting => meeting.StartedUtc)
             .Take(5).ToArray();
         var signature = $"{enabled}:{state}:" + string.Join("|", _upcomingMeetings.Select(meeting => $"{meeting.EventId}:{meeting.Title}:{meeting.StartsAt.UtcTicks}")) + ":" +
@@ -199,7 +199,7 @@ public partial class MainWindow
                 StatusText.Text = "No meetings have been saved yet.";
                 return;
             }
-            new MeetingWindow(meeting) { Owner = this }.ShowDialog();
+            new MeetingWindow(meeting, calendarEventsNear: CalendarEventsNearAsync) { Owner = this }.ShowDialog();
             RefreshList();
         }
         catch (Exception ex)
@@ -213,7 +213,7 @@ public partial class MainWindow
         ShowFromShell();
         var meeting = _historyDocuments.Select(document => document.Meeting).FirstOrDefault(item => item.Id == id);
         if (meeting is null) { StatusText.Text = "That recent meeting is no longer available."; return; }
-        new MeetingWindow(meeting) { Owner = this }.ShowDialog();
+        new MeetingWindow(meeting, calendarEventsNear: CalendarEventsNearAsync) { Owner = this }.ShowDialog();
         RefreshList();
     }
 
@@ -261,6 +261,7 @@ public partial class MainWindow
             AutoStopBox.IsChecked = candidate.AutoStopEnabled;
             _settings.CalendarStartNotifications = candidate.CalendarStartNotifications;
             _settings.CalendarTrayNavigation = candidate.CalendarTrayNavigation;
+            _settings.CalendarNotificationMode = candidate.CalendarNotificationMode;
             _hotkeyRegistrationError = null;
             StatusText.Text = runtimeChanged ? "Settings saved locally. Restart Biscotti to apply the runtime change." : "Settings saved locally.";
             return null;
@@ -307,9 +308,12 @@ public partial class MainWindow
 
     private void MaybeShowCalendarNotification()
     {
-        if (!_settings.CalendarStartNotifications || string.IsNullOrWhiteSpace(_settings.CalendarFilePath)) return;
+        if (!_settings.CalendarStartNotifications || !CalendarConnected) return;
+        if (_meetings.State != RecordingState.Idle || _settings.CalendarNotificationMode == "never") return;
+        _notifiedCalendarEventIds.IntersectWith(_upcomingMeetings.Select(e => e.EventId));
         var now = DateTimeOffset.Now;
-        foreach (var meeting in _upcomingMeetings.Where(meeting => meeting.StartsAt >= now && meeting.StartsAt <= now.AddMinutes(5)))
+        foreach (var meeting in _upcomingMeetings.Where(meeting => meeting.StartsAt >= now && meeting.StartsAt <= now.AddMinutes(5)
+            && (_settings.CalendarNotificationMode != "video" || meeting.ConferenceUrl is not null)))
         {
             if (!_notifiedCalendarEventIds.Add(meeting.EventId)) continue;
             try

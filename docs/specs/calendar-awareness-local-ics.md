@@ -1,6 +1,6 @@
 # Local iCalendar file source for meeting prompts
 
-**Status:** Accepted
+**Status:** Superseded by [Windows calendar parity](calendar-parity-windows.md).
 
 ## Decision
 

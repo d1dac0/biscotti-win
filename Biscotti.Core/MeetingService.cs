@@ -53,6 +53,18 @@ public sealed class MeetingService : IAsyncDisposable
 
     public Meeting? Current => _current;
 
+    public void LinkCalendarEvent(CalendarMeeting? calendarEvent)
+    {
+        lock (_meetingMutationLock)
+        {
+            if (State != RecordingState.Recording || _current is null)
+                throw new InvalidOperationException("Calendar context can only change while recording.");
+            CalendarAssociation.Set(_current, calendarEvent, MeetingStore.Save);
+            _currentCalendarMeeting = calendarEvent;
+        }
+        CurrentMeetingUpdated?.Invoke(_current);
+    }
+
     /// <summary>Live per-channel byte counts for the UI's recording-health readout (issue #21).</summary>
     public (long mic, long sys) RecordingStats => _recorder.TotalBytes;
     public string SystemAudioStatus => _recorder.SystemAudioStatus;
@@ -104,6 +116,7 @@ public sealed class MeetingService : IAsyncDisposable
                 {
                     meeting.Title = calendarMeeting.Title;
                     meeting.CalendarAttendees = calendarMeeting.Attendees.ToList();
+                    meeting.CalendarEvent = calendarMeeting;
                 }
                 meeting.ProcessingStatus = MeetingProcessingStatus.Recording;
                 MeetingStore.Save(meeting);

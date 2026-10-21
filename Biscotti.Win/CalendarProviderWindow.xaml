@@ -1,0 +1,35 @@
+<Window x:Class="Biscotti.Win.CalendarProviderWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Connect a calendar provider" Width="610" Height="590" MinWidth="450" MinHeight="460"
+        WindowStartupLocation="CenterOwner" Style="{StaticResource {x:Type Window}}">
+    <Grid Margin="24">
+        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock x:Name="ProviderHeading" Style="{StaticResource PageTitle}"/>
+                <TextBlock x:Name="SetupInstructions" Style="{StaticResource Hint}" Margin="0,12,0,16"/>
+                <Label Content="Calendar _name" Target="{Binding ElementName=CalendarLabel}"/>
+                <TextBox x:Name="CalendarLabel" AutomationProperties.Name="Calendar name" Margin="0,0,0,12"/>
+                <StackPanel x:Name="FeedFields">
+                    <Label Content="Private iCalendar subscription _link" Target="{Binding ElementName=FeedUrl}"/>
+                    <PasswordBox x:Name="FeedUrl" AutomationProperties.Name="Calendar subscription link"/>
+                    <TextBlock Text="The link can grant access to your calendar. It is hidden here and protected with Windows encryption when saved." Style="{StaticResource Hint}" Margin="0,8,0,12"/>
+                </StackPanel>
+                <StackPanel x:Name="AppleFields" Visibility="Collapsed">
+                    <Label Content="Apple _account email" Target="{Binding ElementName=AppleAccount}"/>
+                    <TextBox x:Name="AppleAccount" AutomationProperties.Name="Apple account email" Margin="0,0,0,12"/>
+                    <Label Content="App-specific _password" Target="{Binding ElementName=ApplePassword}"/>
+                    <PasswordBox x:Name="ApplePassword" AutomationProperties.Name="Apple app-specific password"/>
+                    <TextBlock Text="Use the password generated for Biscotti in your Apple account, rather than your main Apple password." Style="{StaticResource Hint}" Margin="0,8,0,12"/>
+                </StackPanel>
+                <TextBlock Text="Only calendar schedules are fetched. Audio, transcripts, notes and summaries stay on this PC." Style="{StaticResource Hint}" Margin="0,8,0,0"/>
+            </StackPanel>
+        </ScrollViewer>
+        <TextBlock x:Name="ProviderStatus" Grid.Row="1" Style="{StaticResource Hint}" Margin="0,12" AutomationProperties.LiveSetting="Polite"/>
+        <WrapPanel Grid.Row="2" HorizontalAlignment="Right">
+            <Button Content="Cancel" IsCancel="True" Margin="0,0,8,0"/>
+            <Button x:Name="ConnectProviderButton" Content="Connect calendar" Click="Connect_Click" Style="{StaticResource PrimaryButton}"/>
+        </WrapPanel>
+    </Grid>
+</Window>

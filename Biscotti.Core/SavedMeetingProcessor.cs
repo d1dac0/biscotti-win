@@ -152,7 +152,7 @@ public sealed class SavedMeetingProcessor
         using var ollama = new OllamaService(settings.OllamaModel,
             new SummaryPreferences(settings.SummaryLength, settings.SummaryGuidance));
         var raw = await ollama.SummarizeMeetingAsync(meeting.Transcript, ct: ct,
-            knownAttendees: meeting.CalendarAttendees);
+            knownAttendees: meeting.CalendarAttendees, calendarMeeting: meeting.CalendarEvent);
         if (string.IsNullOrWhiteSpace(raw))
             throw new HttpRequestException("Local Ollama is unavailable or returned no summary.");
         var (summary, actions, title, _) = SummaryParser.Parse(raw);
