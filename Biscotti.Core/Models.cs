@@ -22,6 +22,7 @@ public sealed class TimestampedMeetingNote
 
 public sealed class TranscriptLine
 {
+    public string? SpeakerKey { get; set; }
     public required string Speaker { get; set; }
     public required string Text { get; set; }
     public required double StartSeconds { get; set; }

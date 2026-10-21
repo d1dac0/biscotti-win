@@ -45,6 +45,7 @@ namespace Biscotti.Win
             NotesGrid.RowDefinitions[2].Height = isLiveRecording ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
             AudioTab.IsEnabled = !isLiveRecording;
             TransferControls.IsEnabled = !isLiveRecording;
+            UpdateSpeakerControls();
             RefreshTimestampedNotes();
             UpdateReviewState();
             if (!isLiveRecording && !string.IsNullOrWhiteSpace(meeting.Summary)) ReviewTabs.SelectedItem = SummaryTab;
@@ -122,6 +123,7 @@ namespace Biscotti.Win
             NotesGrid.RowDefinitions[2].Height = new GridLength(1, GridUnitType.Star);
             AudioTab.IsEnabled = true;
             TransferControls.IsEnabled = true;
+            UpdateSpeakerControls();
             TitleBox.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty)?.UpdateTarget();
             SummaryBox.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty)?.UpdateTarget();
             GetBindingExpression(TitleProperty)?.UpdateTarget();

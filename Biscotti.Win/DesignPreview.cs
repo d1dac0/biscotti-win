@@ -14,9 +14,9 @@ internal static class DesignPreview
         var argument = args.FirstOrDefault(a => a == "--design-preview" || a.StartsWith("--design-preview=", StringComparison.Ordinal));
         if (argument is null) return false;
         var mode = argument.Contains('=') ? argument.Split('=', 2)[1] : "history";
-        if (!new[] { "setup", "empty", "history", "recording", "processing", "failure", "review", "transfer", "tray" }.Contains(mode))
+        if (!new[] { "setup", "empty", "history", "recording", "processing", "failure", "review", "transfer", "speakers", "tray" }.Contains(mode))
         {
-            MessageBox.Show("Preview states: setup, empty, history, recording, processing, failure, review, transfer, tray.", "Design preview");
+            MessageBox.Show("Preview states: setup, empty, history, recording, processing, failure, review, transfer, speakers, tray.", "Design preview");
             System.Windows.Application.Current.Shutdown();
             return true;
         }
@@ -33,6 +33,12 @@ internal static class DesignPreview
             new ImportPreviewWindow(new Biscotti.Core.Storage.ImportPreview(new[] { CreateMeeting() }, 2,
                 new[] { "Row 4: invalid fields, dates or timeline. Check the CSV format." }))
                 { Owner = window }.ShowDialog();
+        if (mode == "speakers")
+        {
+            var review = new MeetingWindow(CreateMeeting(), designPreview: true) { Owner = window };
+            review.Show();
+            ((TabControl)review.FindName("ReviewTabs")).SelectedItem = review.FindName("SpeakersTab");
+        }
         if (mode == "tray") window.ShowPreviewTray();
         return true;
     }
@@ -48,9 +54,9 @@ internal static class DesignPreview
         ActionItems = new() { "Alex: share the test checklist by Wednesday.", "Jordan: review the results on Friday." },
         Transcript = new()
         {
-            new() { Speaker = "Alex", StartSeconds = 12, EndSeconds = 20, Text = "Let's keep the Atlas prototype test focused on the main workflow." },
-            new() { Speaker = "Jordan", StartSeconds = 24, EndSeconds = 32, Text = "Agreed. Thursday works for the test. I'll review the results on Friday." },
-            new() { Speaker = "Alex", StartSeconds = 38, EndSeconds = 46, Text = "I'll share the checklist by Wednesday, including the accessibility checks." },
+            new() { Speaker = "Alex", SpeakerKey = "system:0", StartSeconds = 12, EndSeconds = 20, Text = "Let's keep the Atlas prototype test focused on the main workflow." },
+            new() { Speaker = "Jordan", SpeakerKey = "system:1", StartSeconds = 24, EndSeconds = 32, Text = "Agreed. Thursday works for the test. I'll review the results on Friday." },
+            new() { Speaker = "Alex", SpeakerKey = "system:0", StartSeconds = 38, EndSeconds = 46, Text = "I'll share the checklist by Wednesday, including the accessibility checks." },
         },
         TimestampedNotes = new() { new() { StartSeconds = 38, Text = "Checklist due Wednesday. Include keyboard navigation." } },
     };

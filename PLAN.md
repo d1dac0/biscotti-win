@@ -175,6 +175,21 @@ obsolete and inexact test-read warnings remain outside this issue.
 walkthrough passed. See [verification](docs/meeting-history-search-verification.md).
 Integration verification after #80: build/check passed, 123 tests.
 
+## Active work: local speaker memory (#82)
+
+1. Record the [speaker memory decision](docs/specs/local-speaker-memory.md).
+2. Add stable group keys, encrypted opt-in person storage, conservative suggestions,
+   explicit corrections and forget controls in the meeting Speakers tab.
+3. Verify synthetic false-match/ambiguity cases, storage and correction regressions,
+   build/check, and the native Windows workflow before one labelled PR.
+
+Baseline at b43780c: build/check passed, 123 tests; existing obsolete NAudio
+and inexact test-read warnings. Additional independent review and real-speaker
+accuracy evaluation are outside this change; synthetic evidence is not calibration.
+
+#82 local verification complete: build/check passed, 133 tests; native synthetic
+speaker-correction walkthrough passed. See [verification](docs/speaker-memory-verification.md).
+
 ## Active work: explicit local meeting transfer (#83)
 
 1. Define CSV v1, validation, duplicate handling and protected import commit

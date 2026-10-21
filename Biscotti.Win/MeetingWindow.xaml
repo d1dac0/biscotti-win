@@ -32,7 +32,7 @@
             <TextBlock x:Name="TransferStatus" Text="Copy and export include current edits as unencrypted text, without audio." Style="{StaticResource Hint}" AutomationProperties.LiveSetting="Polite"/>
         </StackPanel>
 
-        <TabControl x:Name="ReviewTabs" Grid.Row="1" Margin="0,20,0,0">
+        <TabControl x:Name="ReviewTabs" Grid.Row="1" Margin="0,20,0,0" SelectionChanged="ReviewTabs_SelectionChanged">
             <TabItem x:Name="TranscriptTab" Header="Transcript">
                 <Grid>
                 <TextBlock x:Name="TranscriptEmptyText" Style="{StaticResource Hint}" Margin="12" Text="No transcript is available for this meeting yet." Visibility="Collapsed"/>
@@ -121,6 +121,38 @@
                              VerticalScrollBarVisibility="Auto"/>
                     </GroupBox>
                 </Grid>
+            </TabItem>
+            <TabItem x:Name="SpeakersTab" Header="Speakers">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12">
+                        <TextBlock Text="Correct a speaker" FontSize="20" FontWeight="SemiBold"/>
+                        <TextBlock Text="Labels apply to this speaker's transcript turns. Existing summaries stay as written. Changes below save immediately."
+                                   Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,8,0,12"/>
+                        <ComboBox x:Name="SpeakerGroupBox" DisplayMemberPath="Display" SelectionChanged="SpeakerGroup_Changed"
+                                  AutomationProperties.Name="Transcript speaker group"/>
+                        <TextBox x:Name="SpeakerNameBox" Margin="0,8" MaxLength="80" AutomationProperties.Name="Corrected speaker label"/>
+                        <WrapPanel>
+                            <Button x:Name="CorrectSpeakerButton" Content="Save label" Click="CorrectSpeaker_Click" Margin="0,0,8,8"/>
+                            <Button x:Name="AnalyzeVoiceButton" Content="Find remembered voice" Click="AnalyzeVoice_Click" Margin="0,0,8,8"/>
+                        </WrapPanel>
+                        <TextBlock x:Name="SpeakerSuggestionText" Text="Voice suggestions need at least two clear speech segments of two seconds each."
+                                   Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,8"/>
+                        <Button x:Name="UseSuggestionButton" Content="Use suggested label" Click="UseSuggestion_Click" IsEnabled="False"
+                                HorizontalAlignment="Left" Margin="0,0,0,16"/>
+                        <Separator/>
+                        <CheckBox x:Name="SpeakerMemoryEnabled" Content="Enable local speaker memory (opt in)" Click="SpeakerMemoryEnabled_Click" Margin="0,16,0,8"/>
+                        <TextBlock Text="Only voices you explicitly remember are saved, encrypted for your Windows profile. Suggestions can be wrong: confirm the person. Disabling memory forgets all people and voices; past transcript labels remain."
+                                   Style="{StaticResource Hint}" TextWrapping="Wrap"/>
+                        <TextBlock Text="Remember this analyzed voice as" Margin="0,12,0,6"/>
+                        <ComboBox x:Name="RememberedPersonBox" DisplayMemberPath="Name" AutomationProperties.Name="Remembered person or new person"/>
+                        <WrapPanel Margin="0,8,0,0">
+                            <Button x:Name="RememberVoiceButton" Content="Remember voice" Click="RememberVoice_Click" Margin="0,0,8,8"/>
+                            <Button x:Name="ForgetPersonButton" Content="Forget selected person" Click="ForgetPerson_Click" Margin="0,0,8,8"/>
+                            <Button x:Name="ForgetAllButton" Content="Forget all and disable" Click="ForgetAll_Click" Margin="0,0,8,8"/>
+                        </WrapPanel>
+                        <TextBlock x:Name="SpeakerStatus" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,8,0,0" AutomationProperties.LiveSetting="Polite"/>
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
             <TabItem x:Name="AudioTab" Header="Audio">
                 <StackPanel Margin="16">
