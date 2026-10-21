@@ -29,13 +29,15 @@ The WPF app launched successfully on Windows build 26200. The meeting was not
 started, so this confirms startup only, not AEC hardware support or acoustic
 performance.
 
-User-reported hardware observation (2026-10-21): both audio channels were heard
-correctly, with no echo or loopback noticed. The user did not see an explicit
-AEC-started status. This confirms the observed playback/channel behavior for
-that run, but does not establish whether Windows AEC activated or measure
-acoustic leakage reduction. During recording, the main window shows the AEC
-status in its “Recording health” line; repeat the check there if AEC activation
-needs to be confirmed.
+User-reported hardware observation (2026-10-21): a screenshot during recording
+showed about 20 seconds elapsed, with 0.6 MB in each channel, and the status
+“Windows echo cancellation is unavailable for this microphone or output.
+Microphone audio is recorded without echo cancellation.” The user reported both
+channels were heard correctly and no echo or loopback was noticed. This verifies
+that the fallback status is visible and both channels captured data; it does not
+measure acoustic leakage or verify AEC on this device setup. The screenshot
+showed all-speaker loopback selected, so app-only loopback behavior also remains
+unverified.
 
 For the walkthrough, select the same microphone and output used by the call,
 record the same synthetic speech sample once through speakers and once through
