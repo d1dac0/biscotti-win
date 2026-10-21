@@ -233,6 +233,7 @@ public sealed class MeetingFlowTests
                 speakers.Close();
                 MarkdownNotesChecks.Run();
                 AudioTransportChecks.Run();
+                BrandIconChecks.Run(main);
                 main.Close();
                 app.Shutdown();
             }

@@ -1,4 +1,5 @@
 <Window x:Class="Biscotti.Win.ImportPreviewWindow"
+        Icon="pack://application:,,,/Biscotti.Win;component/Assets/biscotti.ico"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Preview CSV import" Width="620" Height="440" MinWidth="480" MinHeight="360"

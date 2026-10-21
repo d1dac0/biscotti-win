@@ -12,6 +12,7 @@ namespace Biscotti.Win;
 public partial class MainWindow
 {
     private Forms.NotifyIcon? _trayIcon;
+    private System.Drawing.Icon? _biscottiTrayIcon;
     private Forms.ToolStripMenuItem? _recordMenuItem;
     private Forms.ToolStripMenuItem? _openLastMenuItem;
     private Forms.ToolStripMenuItem? _calendarMenuItem;
@@ -47,9 +48,10 @@ public partial class MainWindow
         _exitMenuItem = new Forms.ToolStripMenuItem("Exit", null, (_, _) => ExitFromShell());
         menu.Items.Add(_exitMenuItem);
 
+        _biscottiTrayIcon = LoadBiscottiTrayIcon();
         _trayIcon = new Forms.NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = _biscottiTrayIcon,
             Text = "Biscotti Win — idle",
             ContextMenuStrip = menu,
             Visible = true,
@@ -111,9 +113,6 @@ public partial class MainWindow
         var isBusy = state != RecordingState.Idle;
         var stateName = isRecording ? "recording" : isBusy ? "processing" : "idle";
         _trayIcon.Text = $"Biscotti Win — {stateName}";
-        _trayIcon.Icon = isRecording
-            ? System.Drawing.SystemIcons.Information
-            : isBusy ? System.Drawing.SystemIcons.Warning : System.Drawing.SystemIcons.Application;
         if (_recordMenuItem is not null)
         {
             _recordMenuItem.Text = isRecording ? "Stop recording" : "Start recording";
@@ -297,6 +296,15 @@ public partial class MainWindow
         catch { /* Windows may disable app notifications or Focus Assist may suppress delivery. */ }
     }
 
+    private static System.Drawing.Icon LoadBiscottiTrayIcon()
+    {
+        var resource = Application.GetResourceStream(new Uri("pack://application:,,,/Biscotti.Win;component/Assets/biscotti.ico"))
+            ?? throw new InvalidOperationException("The Biscotti tray icon resource is missing.");
+        using var stream = resource.Stream;
+        using var icon = new System.Drawing.Icon(stream, Forms.SystemInformation.SmallIconSize);
+        return (System.Drawing.Icon)icon.Clone();
+    }
+
     private void MaybeShowCalendarNotification()
     {
         if (!_settings.CalendarStartNotifications || string.IsNullOrWhiteSpace(_settings.CalendarFilePath)) return;
@@ -329,5 +337,7 @@ public partial class MainWindow
             _trayIcon.Dispose();
             _trayIcon = null;
         }
+        _biscottiTrayIcon?.Dispose();
+        _biscottiTrayIcon = null;
     }
 }
