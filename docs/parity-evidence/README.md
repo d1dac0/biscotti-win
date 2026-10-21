@@ -69,7 +69,9 @@ No macOS execution, Windows screen-reader session, OS high-contrast toggle,
 200% display scaling or full hardware meeting-app matrix was performed.
 Cross-platform runtime visuals and appearance work are tracked in
 [#89](https://github.com/d1dac0/biscotti-win/issues/89); capture/echo work in
-[#90](https://github.com/d1dac0/biscotti-win/issues/90).
+[#90](https://github.com/d1dac0/biscotti-win/issues/90). The Windows dark
+palette and the validation completed for #89 are recorded in
+[issue-89-appearance.md](issue-89-appearance.md).
 Extended separate review and local release-package smoke were not run; CI
 already includes the release-package smoke. Final CI outcome is linked on the PR.
 
