@@ -23,6 +23,7 @@ public partial class MainWindow
         _historyReady = true;
         _historyFailure = null;
         UpdateTransferControls();
+        RefreshTagFilterChoices();
         _ = ApplyHistorySearchAsync(selectedId, debounce: false);
     }
 
@@ -33,6 +34,7 @@ public partial class MainWindow
         _historyReady = false;
         _historyFailure = "Saved meetings could not be loaded. Protected data may be unavailable. Reopen Biscotti after checking the storage error.";
         UpdateTransferControls();
+        RefreshTagFilterChoices();
         MeetingList.ItemsSource = null;
         OpenMeetingButton.IsEnabled = false;
         HistoryStatus.Text = _historyFailure;
@@ -62,15 +64,20 @@ public partial class MainWindow
             if (debounce) await Task.Delay(200, token);
             var results = await Task.Run(() => MeetingHistorySearch.Search(documents, query, token), token);
             if (token.IsCancellationRequested) return;
+            var tagFilter = SelectedTagFilter;
+            if (tagFilter is not null)
+                results = results.Where(r => r.Meeting.Tags.Contains(tagFilter, StringComparer.OrdinalIgnoreCase)).ToList();
             var view = new ListCollectionView(results);
             if (string.IsNullOrWhiteSpace(query)) view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(MeetingHistoryResult.DateGroup)));
             MeetingList.ItemsSource = view;
             MeetingList.SelectedItem = results.FirstOrDefault(r => r.Meeting.Id == selectedId);
             HistoryStatus.Text = results.Count == 0
                 ? documents.Length == 0 ? "No meetings yet. Record your first meeting to see its transcript, summary and notes here."
-                    : "No matching meetings. Try another phrase or clear search."
-                : string.IsNullOrWhiteSpace(query) ? $"{results.Count} {(results.Count == 1 ? "meeting" : "meetings")} · newest first. Select a meeting and press Enter to open."
-                    : $"{results.Count} matching {(results.Count == 1 ? "meeting" : "meetings")} · title matches first. Select a meeting and press Enter to open.";
+                    : tagFilter is null ? "No matching meetings. Try another phrase or clear search."
+                        : "No meetings carry this tag with the current search. Clear the tag filter or try another phrase."
+                : string.IsNullOrWhiteSpace(query)
+                    ? $"{results.Count} {(results.Count == 1 ? "meeting" : "meetings")}{(tagFilter is null ? "" : $" tagged {tagFilter}")} · newest first. Select a meeting and press Enter to open."
+                    : $"{results.Count} matching {(results.Count == 1 ? "meeting" : "meetings")}{(tagFilter is null ? "" : $" tagged {tagFilter}")} · title matches first. Select a meeting and press Enter to open.";
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception)

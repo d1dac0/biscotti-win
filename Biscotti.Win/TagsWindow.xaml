@@ -1,0 +1,26 @@
+<Window x:Class="Biscotti.Win.TagsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Icon="pack://application:,,,/Biscotti.Win;component/Assets/biscotti.ico"
+        Title="Manage meeting tags" Height="440" Width="520" MinWidth="400" MinHeight="320"
+        Style="{StaticResource {x:Type Window}}" ShowInTaskbar="False" WindowStartupLocation="CenterOwner">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <TextBlock Text="Rename or delete a tag across every meeting that carries it. Changes save immediately and stay on this PC."
+                   Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+        <ListBox x:Name="TagsList" Grid.Row="1" AutomationProperties.Name="Tags across saved meetings"
+                 SelectionChanged="TagsList_SelectionChanged"/>
+        <DockPanel Grid.Row="2" Margin="0,12,0,0">
+            <Button x:Name="RenameTagButton" DockPanel.Dock="Right" Content="_Rename" Margin="8,0,0,0" Click="RenameTag_Click" IsEnabled="False"/>
+            <Button x:Name="DeleteTagButton" DockPanel.Dock="Right" Content="_Delete" Margin="8,0,0,0" Click="DeleteTag_Click" IsEnabled="False"/>
+            <TextBox x:Name="RenameTagBox" MaxLength="40" AutomationProperties.Name="New tag name"
+                     ToolTip="Type the new name, then choose Rename."/>
+        </DockPanel>
+        <TextBlock x:Name="TagStatus" Grid.Row="3" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,10,0,0" AutomationProperties.LiveSetting="Polite"/>
+    </Grid>
+</Window>

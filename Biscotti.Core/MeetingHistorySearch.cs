@@ -13,6 +13,7 @@ public sealed record MeetingSearchDocument(Meeting Meeting, IReadOnlyList<Meetin
             if (!string.IsNullOrWhiteSpace(text)) fields.Add(new(label, text, rank));
         }
         Add("Title", meeting.Title, 0);
+        foreach (var tag in meeting.Tags) Add("Tag", tag, 0);
         Add("Summary", meeting.Summary, 1);
         Add("Notes", meeting.Notes, 2);
         foreach (var note in meeting.TimestampedNotes) Add("Note", note.Text, 2);
@@ -27,9 +28,10 @@ public sealed record MeetingSearchDocument(Meeting Meeting, IReadOnlyList<Meetin
 }
 
 public sealed record MeetingSearchField(string Label, string Text, int Rank);
-public sealed record MeetingHistoryResult(Meeting Meeting, string Snippet, int Rank)
-{
-    public string DateGroup => Meeting.StartedUtc.ToLocalTime().ToString("yyyy-MM");
+    public sealed record MeetingHistoryResult(Meeting Meeting, string Snippet, int Rank)
+    {
+        public string DateGroup => Meeting.StartedUtc.ToLocalTime().ToString("yyyy-MM");
+        public string TagsLine => Meeting.Tags.Count == 0 ? "" : $"Tags: {string.Join(" · ", Meeting.Tags)}";
     public string ProcessingNotice => Meeting.ProcessingStatus switch
     {
         MeetingProcessingStatus.Recording => "Recording stopped unexpectedly · recover saved audio",

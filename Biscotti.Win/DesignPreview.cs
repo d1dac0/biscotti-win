@@ -106,6 +106,7 @@ internal static class DesignPreview
         EndedUtc = new DateTime(2026, 10, 20, 15, 18, 0, DateTimeKind.Utc),
         Summary = "## Decisions\n\nThe team will test the Atlas prototype on Thursday.\n\n## Next steps\n\nAlex will share the checklist. Jordan will review the results.",
         Notes = "## My notes\n\n- Keep the first test small.\n- Review accessibility before release.",
+        Tags = new() { "Atlas", "Planning" },
         ActionItems = new() { "Alex: share the test checklist by Wednesday.", "Jordan: review the results on Friday." },
         Transcript = new()
         {

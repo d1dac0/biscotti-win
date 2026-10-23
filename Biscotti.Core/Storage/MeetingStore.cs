@@ -192,6 +192,7 @@ public static class MeetingStore
         sb.AppendLine($"# {m.Title}");
         sb.AppendLine();
         sb.AppendLine($"_{m.StartedUtc.ToLocalTime():yyyy-MM-dd HH:mm}_ — {m.Transcript.Count} lines");
+        if (m.Tags.Count > 0) sb.AppendLine($"**Tags:** {string.Join(", ", m.Tags)}");
         sb.AppendLine();
         if (!string.IsNullOrWhiteSpace(m.Summary))
         {

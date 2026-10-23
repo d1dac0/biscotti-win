@@ -112,6 +112,12 @@
                              ToolTip="Search a phrase in titles, summaries, notes, actions and transcripts. Escape clears; Down selects a result."/>
                 </DockPanel>
                 <TextBlock Text="Find a phrase in titles, summaries, notes, actions or transcripts. Down selects a result; Enter opens it." Style="{StaticResource Hint}" Margin="8,0,8,8"/>
+                <Label Target="{Binding ElementName=TagFilterBox}" Content="Filter by _tag" Margin="8,0,8,4"/>
+                <DockPanel Margin="8,0,8,8">
+                    <Button x:Name="ManageTagsButton" DockPanel.Dock="Right" Content="_Manage tags…" Margin="8,0,0,0" Click="ManageTags_Click"
+                            ToolTip="Rename or delete a tag across every meeting that carries it."/>
+                    <ComboBox x:Name="TagFilterBox" AutomationProperties.Name="Filter meetings by tag" SelectionChanged="TagFilter_Changed"/>
+                </DockPanel>
                 <TextBlock x:Name="HistoryStatus" Text="Loading saved meetings…" Style="{StaticResource Hint}" Margin="8" AutomationProperties.LiveSetting="Polite"/>
                 <ListBox x:Name="MeetingList" Background="Transparent" BorderThickness="0" MaxHeight="420"
                          AutomationProperties.Name="Meeting history results" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -146,6 +152,15 @@
                                         <Run Text="{Binding Meeting.Transcript.Count, Mode=OneWay, StringFormat='{}{0} lines'}"/>
                                     </TextBlock>
                                     <TextBlock Text="{Binding Snippet}" Style="{StaticResource Hint}" Margin="0,6,0,0"/>
+                                    <TextBlock Text="{Binding TagsLine, Mode=OneWay}" Margin="0,4,0,0">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource Hint}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding TagsLine}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </StackPanel>
                             </Border>
                         </DataTemplate>
