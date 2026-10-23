@@ -4,7 +4,7 @@ Free, private meeting transcription and review for Windows. Biscotti captures yo
 
 **Your meetings stay on your PC.** No account is required, no bot joins the call, and meeting audio, transcripts, summaries, and models are not uploaded. Network access is used for app/model/runtime downloads and, if you connect a provider, to fetch your calendar schedule. Recording and AI processing stay on this PC.
 
-[Get started](#get-started) · [Windows installation](docs/windows-release.md) · [Calendar setup](docs/calendar-setup.md) · [Local MCP setup](docs/mcp-server.md)
+[Get started](#get-started) · [Download from Releases](https://github.com/d1dac0/biscotti-win/releases/latest) · [Windows installation](docs/windows-release.md) · [Calendar setup](docs/calendar-setup.md) · [Local MCP setup](docs/mcp-server.md)
 
 ![Biscotti Win in dark mode with upcoming meetings, recording controls, and searchable meeting history](docs/screenshots/meeting-home.png)
 
@@ -58,7 +58,7 @@ The [Windows release guide](docs/windows-release.md) explains installation, upda
 
 ## Get started
 
-1. Install Biscotti using the [Windows release guide](docs/windows-release.md), then launch `Biscotti.Win.exe`.
+1. Install Biscotti: download the signed ZIP from [Releases](https://github.com/d1dac0/biscotti-win/releases/latest) and follow the [Windows release guide](docs/windows-release.md), then launch `Biscotti.Win.exe`.
 2. Download a Whisper model in the app. Large v3 Turbo is selected by default; choose Small in Settings if you prefer the smaller download.
 3. To enable summaries, install Ollama, run `ollama pull gemma3:4b`, then choose an installed local model in Biscotti Settings.
 4. Select your audio devices, optionally select the meeting app and connect calendars, then start recording.
