@@ -45,6 +45,32 @@
                     <TextBlock x:Name="CalendarLinkStatus" Style="{StaticResource Hint}" AutomationProperties.LiveSetting="Polite"/>
                 </StackPanel>
             </Border>
+            <StackPanel x:Name="TagsPanel" Margin="0,12,0,0">
+                <ItemsControl x:Name="TagChips" AutomationProperties.Name="Meeting tags">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{DynamicResource WashBrush}" CornerRadius="4" Padding="10,4" Margin="0,0,6,6">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding}" VerticalAlignment="Center"/>
+                                    <Button Content="Remove" Tag="{Binding}" Click="RemoveTag_Click" Margin="8,0,0,0" Padding="8,1"
+                                            AutomationProperties.Name="{Binding StringFormat='Remove tag {0}'}"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <DockPanel Margin="0,8,0,0">
+                    <Button x:Name="AddTagButton" DockPanel.Dock="Right" Content="Add tag" MinWidth="80" Margin="8,0,0,0"
+                            Click="AddTag_Click" IsEnabled="False" AutomationProperties.Name="Add tag to meeting"/>
+                    <TextBox x:Name="NewTagBox" MaxLength="40" TextChanged="NewTag_Changed" KeyDown="NewTag_KeyDown"
+                             AutomationProperties.Name="New meeting tag"
+                             ToolTip="A short label like a project or client name. Tags save immediately."/>
+                </DockPanel>
+                <TextBlock x:Name="TagStatus" Style="{StaticResource Hint}" Margin="0,6,0,0" AutomationProperties.LiveSetting="Polite"/>
+            </StackPanel>
             <WrapPanel x:Name="TransferControls" Margin="0,12,0,0">
                 <Button x:Name="CopyMarkdownButton" Content="Copy Markdown…" Click="CopyMarkdown_Click" Margin="0,0,8,4"/>
                 <Button x:Name="ExportMarkdownButton" Content="Export Markdown…" Click="ExportMarkdown_Click" Margin="0,0,8,4"/>

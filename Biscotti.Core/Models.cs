@@ -9,6 +9,7 @@ public sealed class Meeting
     public string Title { get; set; } = "";
     public string? Notes { get; set; }
     public string? Summary { get; set; }
+    public List<string> Tags { get; set; } = new();
     public List<string> CalendarAttendees { get; set; } = new();
     public Biscotti.Core.Calendar.CalendarMeeting? CalendarEvent { get; set; }
     public List<string> ActionItems { get; set; } = new();

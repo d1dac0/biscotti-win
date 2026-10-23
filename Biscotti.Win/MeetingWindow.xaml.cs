@@ -77,6 +77,8 @@ namespace Biscotti.Win
             AudioTab.IsEnabled = !isLiveRecording;
             TransferControls.IsEnabled = !isLiveRecording;
             UpdateSpeakerControls();
+            InitializeTags();
+            RefreshTags();
             RefreshTimestampedNotes();
             TimestampedNotesExpander.IsExpanded = isLiveRecording;
             UpdateReviewState();
@@ -148,6 +150,7 @@ namespace Biscotti.Win
         {
             _isProcessing = true;
             RefreshCalendarContext();
+            TagsPanel.IsEnabled = false;
             LiveStatus.Text = "Processing · preparing your transcript and summary locally";
             SummaryEmptyText.Text = "Preparing your summary locally…";
             LiveNoteInput.IsEnabled = false;
@@ -170,6 +173,8 @@ namespace Biscotti.Win
             NotesGrid.RowDefinitions[2].Height = new GridLength(1, GridUnitType.Star);
             AudioTab.IsEnabled = true;
             TransferControls.IsEnabled = true;
+            TagsPanel.IsEnabled = true;
+            RefreshTags();
             UpdateSpeakerControls();
             TitleBox.Text = _meeting.Title;
             SummaryBox.Text = _meeting.Summary ?? "";
