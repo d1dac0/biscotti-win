@@ -1,3 +1,4 @@
+using Biscotti.Core.Diagnostics;
 using Whisper.net.LibraryLoader;
 
 namespace Biscotti.Core.Transcription;
@@ -31,8 +32,13 @@ public static class WhisperRuntimeConfigurator
         {
             RuntimeOptions.LibraryPath = store.LibraryPathMarker;
             store.PrimeCudaRuntime();
+            SessionDiagnostics.Info("whisper", "runtime engaged=gpu (CUDA)");
             return "gpu";
         }
+        SessionDiagnostics.Info("whisper",
+            settings.WhisperRuntime == "gpu"
+                ? "runtime engaged=cpu (gpu requested but CUDA runtime files not installed)"
+                : "runtime engaged=cpu");
         return "cpu";
     }
 }
