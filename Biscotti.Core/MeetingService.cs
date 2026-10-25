@@ -1,6 +1,7 @@
 using Biscotti.Core.Ai;
 using Biscotti.Core.Audio;
 using Biscotti.Core.Calendar;
+using Biscotti.Core.Diagnostics;
 using Biscotti.Core.Models;
 using Biscotti.Core.Storage;
 using Biscotti.Core.Transcription;
@@ -48,6 +49,7 @@ public sealed class MeetingService : IAsyncDisposable
     private void SetState(RecordingState s, string message)
     {
         lock (_meetingMutationLock) State = s;
+        SessionDiagnostics.Info("meeting", $"state={s}: {message}");
         StateChanged?.Invoke(s, message);
     }
 
@@ -129,14 +131,17 @@ public sealed class MeetingService : IAsyncDisposable
                     () => _recorder.TotalBytes, _settings.GetResolvedModelPath(), _settings.LocalVocabulary);
             });
             _current = pendingMeeting;
+            SessionDiagnostics.Info("meeting",
+                $"recording started: meeting={_current!.Id} mic='{_settings.MicDeviceName}'");
             _liveTranscription!.LinesReady += AppendLiveLines;
             _liveTranscription.WarningReady += warning => AudioWarning?.Invoke(warning);
             _liveTranscription.Start();
             SetState(RecordingState.Recording, $"Recording… click Stop when the call ends. {_recorder.SystemAudioStatus}");
             _autoStopTimer = new Timer(CheckForLoopbackSilence, _current, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         }
-        catch
+        catch (Exception ex)
         {
+            SessionDiagnostics.Exception("meeting", ex);
             StopAutoStopTimer();
             _currentCalendarMeeting = null;
             try
@@ -209,8 +214,9 @@ public sealed class MeetingService : IAsyncDisposable
             StopAutoStopTimer();
         }
         try { await ProcessRecordingAsync(ct); }
-        catch
+        catch (Exception ex)
         {
+            SessionDiagnostics.Exception("meeting", ex);
             if (_current is not null)
             {
                 _current.ProcessingStatus = _current.ProcessingStatus == MeetingProcessingStatus.Summarizing
@@ -320,8 +326,9 @@ public sealed class MeetingService : IAsyncDisposable
         {
             throw;
         }
-        catch
+        catch (Exception ex)
         {
+            SessionDiagnostics.Exception("meeting", ex);
             SetState(RecordingState.Transcribing, "Live transcription failed; retrying from the saved audio…");
             // Keep live partial lines until saved-audio transcription succeeds.
         }

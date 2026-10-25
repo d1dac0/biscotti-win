@@ -1,10 +1,13 @@
 using System.IO;
 using System.IO.Pipes;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
 using System.Windows;
+using Biscotti.Core.Diagnostics;
 using Microsoft.Windows.AppNotifications;
+using Whisper.net.Logger;
 
 namespace Biscotti.Win;
 
@@ -20,6 +23,24 @@ public partial class App : System.Windows.Application
 
     internal static bool IsExitRequested { get; private set; }
 
+    static App()
+    {
+        // Issue #126: the app died mid-recording leaving no OS trace at all (silent
+        // native exit or hard kill). These hooks leave a local record; they log only
+        // and never swallow — an unhandled exception still reaches Windows Error Reporting.
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            SessionDiagnostics.Crash("AppDomain.UnhandledException" +
+                (e.IsTerminating ? " (terminating)" : ""),
+                e.ExceptionObject as Exception ?? new InvalidOperationException($"{e.ExceptionObject}"));
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            SessionDiagnostics.Exception("TaskScheduler.UnobservedTaskException", e.Exception);
+            e.SetObserved();
+        };
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+            SessionDiagnostics.EndProcess(Environment.ExitCode);
+    }
+
     private static string UserIdentity => WindowsIdentity.GetCurrent().User?.Value ?? Environment.UserName;
     private static string InstanceToken => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(UserIdentity)))[..24];
     private static string MutexName => $"Local\\BiscottiWin-{InstanceToken}";
@@ -27,6 +48,16 @@ public partial class App : System.Windows.Application
 
     private async void OnStartup(object sender, StartupEventArgs e)
     {
+        var previousSession = SessionDiagnostics.Start();
+        DispatcherUnhandledException += (_, e) =>
+            SessionDiagnostics.Exception("DispatcherUnhandledException", e.Exception);
+
+        var version = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
+        SessionDiagnostics.Info("app", $"starting Biscotti.Win {version}");
+        LogProvider.AddLogger((level, message) =>
+            SessionDiagnostics.Info("whisper-native", $"{level}: {message}"));
+
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         ThemePalette.Initialize();
         if (DesignPreview.TryShow(e.Args)) return;
@@ -50,6 +81,8 @@ public partial class App : System.Windows.Application
         _mainWindow = mainWindow;
         MainWindow = mainWindow;
         mainWindow.InitializeShell();
+        if (previousSession is not null)
+            mainWindow.SetShellStatus($"Biscotti did not shut down cleanly last time. {previousSession}.");
         if (_notificationError is not null) mainWindow.SetShellStatus($"Windows notifications are unavailable: {_notificationError}");
         mainWindow.Closed += async (_, _) =>
         {
@@ -143,6 +176,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        SessionDiagnostics.Info("app", $"OnExit: clean application shutdown, exit code {e.ApplicationExitCode}");
         ThemePalette.Dispose();
         _pipeCancellation?.Cancel();
         _pipeCancellation?.Dispose();
