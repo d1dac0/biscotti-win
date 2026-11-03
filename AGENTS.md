@@ -95,6 +95,7 @@ git worktree add .worktrees/issue-N -b issue-N-slug
 - Land with `gh pr merge <number> --squash --auto --delete-branch`; merge only
   on green CI.
 - Commit messages: short, plain-English summaries of the behavior changed.
+- Commits, PR bodies, issues and comments carry no tool footer and no tool or model co-author trailer.
 - Never stage everything blindly. Name explicit file paths; never `git add -A`
   or `git add .`. Never commit generated files, build outputs, or meeting data.
 - Multiple agents in parallel: at the start of every session run `gh pr list`
